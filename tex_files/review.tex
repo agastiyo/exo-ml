@@ -2,7 +2,7 @@
 
 \begin{document}
 
-\title{Literature Review: Influence of Host Star Compositions on Exoplanets / Computational Methods}
+\title{Literature Review: Influence of EH Star Properties on Exoplanet Occurrence Rates}
 \author{Agastya Gaur}
 \affil{University of Illinois at Urbana-Champaign}
 
@@ -10,11 +10,49 @@
 
 \section{Introduction}
 
-Since the first discovery of exoplanets by \textbf{[citet here]}, over 200 unique exoplanets have been discovered. From these discoveries, patterns in the characteristics of the exoplanets' host stars have emerged, though it is still impossible to determine with certainty if a star is a host star. 
+Since the first discovery of exoplanets by \citet{mayorJupitermassCompanionSolartype1995}, over 6,000 unique exoplanets have been discovered. From these discoveries, patterns in the characteristics of exoplanet host (EH) stars have been identified. \citet{gonzalezStellarMetallicityGiant1997} first noted that stars hosting Jupiter-mass exoplanets tend to have higher metallicities compared to stars without detected planets, though the same trend was not observed in lower mass exoplanets \citep{udryHARPSSearchSouthern2006}. \citet{barnesAssessmentRotationRates2001} suggested that stellar rotation rates may also influence planet formation, with faster rotating stars being more likely to host massive planets, though the heterogenity of the data made the study inconclusive. \citep{lawsReevaluationSuperLITHIUMrichStar2003} found EH stars tended to be older than non-EH stars, though the data was highly uncertain.
+
+Overall, metallicity appears to be the most robustly correlated stellar property with EH frequency, though other properties such as rotation rate and age may also play a role. Despite these correlations, predictive models of planet occurrence based on stellar properties remain uncertain due to limited samples and detection biases.
+
+The following literature section reviews key studies that have investigated the influence of EH star properties on exoplanet occurrence rates, summarizing their methodologies, findings, and limitations. The paper is organized into subsections focusing on different stellar properties.
 
 \section{Literature}
 
-\citet{udryStatisticalPropertiesExoplanets2007} provides a comprehensive review of work 
+A comprehensive overview of stellar correlations with exoplanet occurrence is provided by \citet{udryStatisticalPropertiesExoplanets2007}, who emphasize metallicity as the dominant factor. The authors summarize findings on the correlations between EH star properties and exoplanet occurrence rates, highlighting metallicity as a key factor. They also cover a wide range of other stellar properties, including mass, age, and rotation rate, discussing their potential influence on planet formation and detection biases. The authors note the limitations of existing studies, including small sample sizes and observational biases.
+
+\subsection{Stellar Metallicity}
+
+\citet{gonzalezStellarMetallicityGiant1997} includes an analysis of a sample of stars with and without detected planets, finding that EH stars had significantly higher metallicities on average. They propose that higher metallicity environments may facilitate the formation of giant planets through core accretion processes. The authors also address the potential selection biases caused by radial velocity detection methods, which are more sensitive to massive planets around metal-rich stars.
+
+\citet{buchhaveAbundanceSmallExoplanets2012} expands on this by analyzing a larger sample of stars hosting small exoplanets. They find that while giant planet hosts tend to be metal-rich, stars hosting smaller planets do not show a significant metallicity enhancement compared to non-EH stars. The authors suggest that high metallicity stars are more conducive to rapid core formation, leading to a higher likelihood of giant planet formation, while smaller planets can form in a wider range of metallicity environments without strong correlation.
+
+\citet{udryHARPSSearchSouthern2006} further postulate that hot Neptunes and super-Earths may not follow the same metallicity trend as giant planets. Their analysis of a sample of stars hosting these smaller exoplanets shows no significant difference in metallicity compared to stars without detected planets.
+
+Overall, these studies consistently find that stellar metallicity is a key factor influencing the occurrence rates of giant exoplanets, while smaller planets appear less sensitive to host star metallicity. All three studies attribute this trend to the core accretion model of planet formation, where higher metallicity environments facilitate the rapid formation of solid cores necessary for giant planet formation, while smaller planets can form in a wider range of metallicity environments. They also acknowledge the limitations of their samples and the potential biases introduced by detection methods.
+
+\subsection{Stellar Rotation Rate}
+
+\citet{barnesAssessmentRotationRates2001} investigates the relationship between stellar rotation rates and the presence of giant exoplanets. The authors analyze a sample of EH stars and compare their rotation rates to a control sample of non-EH stars. They find that EH stars tend to have faster rotation rates, suggesting a potential link between stellar rotation and planet formation.
+
+\citet{eggenbergerEffectsRotationMagnetic2010} explores the impact of rotation rate on the lithium abundance of stars. The authors cite \citet{israelianEnhancedLithiumDepletion2009}, who found that EH stars exhibit lower lithium abundances compared to non-EH stars, potentially due to enhanced lithium depletion caused by the presence of planets. The authors suggest that faster rotating stars may experience stronger magnetic activity, leading to increased lithium depletion, which could be linked to the presence of planets.
+
+While \citet{barnesAssessmentRotationRates2001} suggests faster rotation may correlate with planet presence, later work connected rotation-driven mixing and lithium depletion \citep{eggenbergerEffectsRotationMagnetic2010,israelianEnhancedLithiumDepletion2009} as possible indirect indicators of planet–star interaction.Both studies suggest a potential correlation between stellar rotation rates and the presence of exoplanets, though the exact nature of this relationship remains unclear. They acknowledge the limitations of their samples and the need for further research to confirm these findings.
+
+\subsection{Stellar Age}
+
+\citet{lawsReevaluationSuperLITHIUMrichStar2003} examines the ages of EH stars compared to non-EH stars. The authors find that EH stars tend to be older on average, suggesting that planet formation may be more likely around older stars.
+
+\citet{meloAgeStarsHarboring2006} builds on this theory by analyzing a larger sample of EH stars that host transiting planets. They find that while some EH stars are indeed older, there is a wide range of ages among EH stars, indicating that planet formation can occur around stars of various ages. However, the study places a lower bound on the age of EH stars at 1 Gyr, suggesting that very young stars are less likely to host planets.
+
+\citep{sayeedExoplanetOccurrenceRate2025} utilizes data from the Kepler mission to analyze the occurrence rates of exoplanets around stars of different ages. The authors find that while there is a slight increase in exoplanet occurrence rates around older stars, the trend is not statistically significant.
+
+Overall, these studies suggest that while there may be a tendency for EH stars to be older, planet formation can occur around stars of various ages. The exact relationship between stellar age and exoplanet occurrence rates remains uncertain, with limitations in sample sizes and age determination methods acknowledged by the authors.
+
+\section{Conclusion}
+
+The literature indicates that stellar properties strongly influence exoplanet occurrence rates. Stellar metallicity emerges as the most robustly correlated property, particularly for giant exoplanets, while smaller planets appear less sensitive to host star metallicity. The potential roles of stellar rotation rates and ages are also explored, though findings remain inconclusive due to limited sample sizes and observational biases. Further research with larger, more diverse samples and improved detection methods is necessary to clarify these relationships and enhance our understanding of planet formation processes.
+
+In order to better classify stars as potential exoplanet hosts, future studies should focus on refining the correlations between stellar properties and exoplanet occurrence rates. Machine learning techniques could be employed to analyze large datasets from missions like Kepler and TESS to identify and weight the most predictive stellar characteristics. This can help inform more robust models for predicting exoplanet occurrence rates based on host star properties, ultimately improving the efficiency of exoplanet detection efforts.
 
 \bibliography{references}
 
