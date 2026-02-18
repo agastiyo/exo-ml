@@ -1,0 +1,42 @@
+\documentclass[12pt]{article}
+\usepackage{hyperref}
+
+\begin{document}
+
+\title{Research Notes}
+\author{Agastya Gaur}
+\maketitle
+
+\section{PS Dataset}
+The datset was produced by the NASA Exoplanet Archive \href{
+http://exoplanetarchive.ipac.caltech.edu}{(link)}.
+
+In cases of duplicate rows per host star, the row flagged as default parameters was retained. Information about default parameters can be found \href{https://exoplanetarchive.ipac.caltech.edu/docs/faq.html}{here}. Information about the stellar data cols can be found \href{https://exoplanetarchive.ipac.caltech.edu/docs/API_STELLARHOSTS_columns.html}{here}.
+
+A composite parameters table was NOT used, as composite parameters are not guaranteed to be self-consistent. PCA on stellar parameters assumes that each data vector represents a coherent physical model of the star. Mixing references can cause inconsistencies.
+
+For multi-star systems, only the star listed as the planet host was retained.
+
+\section{Data Imputation}
+The data matrix $X$ contains a significant amount of NaN values.
+\begin{verbatim}
+0/4506 NaN in col 0
+536/4506 NaN in col 1
+629/4506 NaN in col 2
+341/4506 NaN in col 3
+1228/4506 NaN in col 4
+4408/4506 NaN in col 5
+3444/4506 NaN in col 6
+779/4506 NaN in col 7
+2111/4506 NaN in col 8
+3175/4506 NaN in col 9
+3553/4506 NaN in col 10
+4121/4506 NaN in col 11
+3979/4506 NaN in col 12
+\end{verbatim}
+
+A Multiple Imputation by Chained Equations (MICE) approach is being considered for handling this. Possible references: \citep{campbellFullyBayesianApproach2024}
+
+\bibliography{references}
+
+\end{document}
