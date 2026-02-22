@@ -1,77 +1,58 @@
 \documentclass[preprint]{aastex631}
 
 \begin{document}
-\title{A Bayesian Framework for Predicting Exoplanet Occurrence}
+\title{Methodology}
 \author{Agastya Gaur}
 
-\section{Goal}
-As covered in my literature review, stellar parameters such as metallicity, age, and mass have been shown to influence the occurrence rates of exoplanets. However, most stars have limited observational data, making it challenging to study the effects of these parameters and accurately estimate the total number of exoplanets they may host.
+\section{Data}
 
-The goal of this project is to develop a framework to predict the total number of exoplanets orbiting a star based on its stellar parameters and the number of detected exoplanets. I am aiming to be able to create a probabilistic model that calculates a probability distribution of the total number of exoplanets around stars with varying characteristics.
+We obtain the data set from the NASA Exoplanet Archive \citep{nasaexoplanetarchivePlanetarySystemsTable2026}\footnote{Accessed on 2026-02-17 at 12:01:19, returning 5985 rows}. The description of the data parameters is given in \autoref{tab:data_parameters}.
+\begin{table}
+  \centering
+  \begin{tabular}{ll}
+    \hline
+    \textbf{Parameter} & \textbf{Description} \\
+    \hline
+    \verb|hostname| & Host Name \\
+    \verb|default_flag| & Default Parameter Set \\
+    \verb|sy_snum| & Number of Stars \\
+    \verb|sy_pnum| & Number of Planets \\
+    \verb|soltype| & Solution Type \\
+    \verb|pl_controv_flag| & Controversial Flag \\
+    \verb|st_refname| & Stellar Parameter Reference \\
+    \verb|st_spectype| & Spectral Type \\
+    \verb|st_teff| & Stellar Effective Temperature [K] \\
+    \verb|st_rad| & Stellar Radius [Solar Radius] \\
+    \verb|st_mass| & Stellar Mass [Solar mass] \\
+    \verb|st_met| & Stellar Metallicity [dex] \\
+    \verb|st_metratio| & Stellar Metallicity Ratio \\
+    \verb|st_lum| & Stellar Luminosity [log(Solar)] \\
+    \verb|st_logg| & Stellar Surface Gravity [log10(cm/s$^2$)] \\
+    \verb|st_age| & Stellar Age [Gyr] \\
+    \verb|st_dens| & Stellar Density [g/cm$^3$] \\
+    \verb|st_vsin| & Stellar Rotational Velocity [km/s] \\
+    \verb|st_rotp| & Stellar Rotational Period [days] \\
+    \verb|st_radv| & Systemic Radial Velocity [km/s] \\
+    \verb|sy_refname| & System Parameter Reference \\
+    \verb|rastr| & RA [sexagesimal] \\
+    \verb|ra| & RA [deg] \\
+    \verb|decstr| & Dec [sexagesimal] \\
+    \verb|dec| & Dec [deg] \\
+    \verb|sy_dist| & Distance [pc] \\
+    \verb|sy_vmag| & V (Johnson) Magnitude \\
+    \verb|sy_kmag| & Ks (2MASS) Magnitude \\
+    \verb|sy_gaiamag| & Gaia Magnitude \\
+    \verb|rowupdate| & Date of Last Update \\
+    \verb|pl_pubdate| & Planetary Parameter Reference Publication Date \\
+    \verb|releasedate| & Release Date \\
+    \hline
+  \end{tabular}
+  \caption{Data parameters collected from the NASA Exoplanet Archive Planetary Systems Table. More information can be found at \url{https://exoplanetarchive.ipac.caltech.edu/docs/API_PS_columns.html}.}
+  \label{tab:data_parameters}
+\end{table}
 
-With this model, the effect of various stellar parameters on planet occurrence rates can be analyzed, and stars with a high likelihood of hosting undetected exoplanets can be identified for future observations.
 
-\section{Methodology}
-
-Assume a star with a set of parameters $\theta$. Parameters include metallicity, age, mass, spin, etc. A star can host zero or more planets, with $N$ being the total number of exoplanets orbiting the star, $N_{det}$ of which are detected exoplanets. The probability of detecting $N$ planets given $\theta$ and $N_{det}$ detected planets can be modeled using Bayes' Theorem:
-\begin{equation}
-  \label{eq1}
-  P(N | N_{det}, \theta) = \frac{P(N_{det},\theta | N) P(N)}{P(N_{det},\theta)}
-\end{equation}
-Since the prior $P(N)$ is also dependent on the stellar parameters $\theta$, we can rewrite the equation as:
-\begin{equation}
-  P(N | N_{det}, \theta) = \frac{P(N_{det},\theta | N) P(N | \theta)}{P(N_{det},\theta)}
-\end{equation}
-Factoring the likelihood:
-\begin{equation}
-  P(N | N_{det}, \theta) = \frac{P(N_{det} | N,\theta ) P(\theta | N) P(N | \theta)}{P(N_{det},\theta)}
-\end{equation}
-Furthmore, we can make two important assumptions: (1) $P(N_{det})$ and $P(\theta)$ are independent, and (2) $P(\theta | N) = P(\theta)$ \footnote{No evidence of stellar parameters being affected by the number of exoplanets exists, though it may be a path for future work. Leaving this variable in the current project may lead to dimensionality issues.}, leading to:
-\begin{equation}
-  P(N | N_{det}, \theta) = \frac{P(N_{det} | N,\theta ) P(N | \theta) P(\theta)}{P(N_{det})P(\theta)} = \frac{P(N_{det} | N,\theta ) P(N | \theta)}{P(N_{det})}
-\end{equation}
-Finally, treating the denominator as a normalization constant, we arrive at the final form:
-\begin{equation}
-  P(N | N_{det}, \theta) \propto P(N_{det} | N,\theta ) P(N | \theta)
-\end{equation}
-
-This tells us that the probability distribution of the total number of exoplanets $N$ around a star with parameters $\theta$ and $N_{det}$ detected exoplanets is proportional to:
-\begin{enumerate}
-  \item The detection model $P(N_{det} | N,\theta )$, which describes the likelihood of detecting $N_{det}$ planets given the total number of planets $N$ and the stellar parameters $\theta$.
-  \item The occurrence model $P(N | \theta)$, which describes the probability of having $N$ planets around a star with parameters $\theta$.
-\end{enumerate}
-
-\subsection{Detection Model}
-
-$P(N_{det} | N,\theta)$ can be modelled as a Poisson distribution \citep{burkeTERRESTRIALPLANETOCCURRENCE2015,youdinEXOPLANETCENSUSGENERAL2011}, taking the following form:
-\begin{equation}
-  P(N_{det} | N,\theta) = \frac{\lambda(N,\theta)^{N_{det}} e^{-\lambda(N,\theta)}}{N_{det}!}
-\end{equation}
-where the denominator can once again be treated as a normalization constant.
-\begin{equation}
-  P(N_{det} | N,\theta) \propto \lambda(N,\theta)^{N_{det}} e^{-\lambda(N,\theta)}
-\end{equation}
-Here, $\lambda(N,\theta)$ is the expected number of detected planets around a star with parameters $\theta$ and total number of planets $N$. This can be calculated as:
-\begin{equation}
-  \lambda(N,\theta) = N \cdot p_{det}(\theta)
-\end{equation}
-where $p_{det}(\theta)$ is the average detection probability for a planet around a star with parameters $\theta$.
-
-\subsection{Occurrence Model}
-
-$P(N | \theta)$ is the prior, and could be modelled using Gaussian distribution independent of the stellar parameters, starting with a cutoff at $N=N_{det}$ since the total number of planets must be at least the number of detected planets. If assumed independent of stellar parameters, it can be expressed as $P(N)$, as done in \hyperref[eq1]{Equation 1}.
-
-\subsection{Limitations}
-
-This model does not account for the properties of individual planets, such as their masses, radii, or orbital characteristics, though incorporting these factors may lead to dimensionality issues.
-
-Determining $p_{det}(\theta)$ may not be analytically possible, and may require simulations or empirical data to estimate accurately.
-
-Finally, the model relies on a number of assumptions, such as the independence of certain variables, which may cause the model to become oversimplifled.
-
-\section{Non-Bayesian Approach}
-
-A Principal Component Analysis (PCA) approach could also be used to reduce the dimensionality of the stellar parameters $\theta$, identifying the most significant factors influencing planet occurrence. This could be followed by a regression analysis to predict the total number of exoplanets based on the reduced set of parameters. However, this approach neglects the possibility of planets being undetected in observational data, which is a key aspect addressed by the Bayesian framework.
+\citep{weiGSimpGibbsSampler2018}
 
 \bibliography{references}
 
