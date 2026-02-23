@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 #%%
-gaiaDf = pd.read_csv("data/AstrophysicalParameters_000000-003111.csv",comment='#')
+gaiaDf = pd.read_csv("data/raw/AstrophysicalParameters_000000-003111.csv",comment='#')
 print(gaiaDf)
 
 # %%
@@ -36,5 +36,23 @@ plt.hist(gaiaDf['mh_gspspec'],bins=480)
 plt.yscale('log')
 plt.title(r"Stellar Metallicity Distribution")
 plt.xlabel(r"$\frac{M}{H}$ [dex]")
+plt.ylabel("log Count")
+# %%
+plt.hist(gaiaDf['lum_flame'],bins=480)
+plt.yscale('log')
+plt.title(r"Stellar Luminosity Distribution")
+plt.xlabel(r"Luminosity [$L_{sun}$]")
+plt.ylabel("log Count")
+# %%
+plt.hist(10**gaiaDf['logg_msc1'].to_numpy(),bins=480)
+plt.yscale('log')
+plt.title(r"Stellar Surface Gravity Distribution")
+plt.xlabel(r"Surface Gravity [$\frac{cm}{s^2}$]")
+plt.ylabel("log Count")
+# %%
+plt.hist(gaiaDf['age_flame'],bins=480)
+plt.yscale('log')
+plt.title(r"Stellar Age Distribution")
+plt.xlabel(r"Age [$Gyr$]")
 plt.ylabel("log Count")
 # %%
