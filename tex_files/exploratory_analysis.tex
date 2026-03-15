@@ -98,7 +98,7 @@ From the \textit{STELLARHOSTS} table, categorical parameters \verb|sy_name|, \ve
 \end{table}
 
 \subsection{Small-sample PCA}
-Given the high proportion of missing values in many of the numerical parameters, a small-sample PCA approach was adopted to perform an initial, exploratory analysis. This method involved selecting a subset of the data that contained complete cases for a chosen set of parameters, allowing a trial run of PCA for initial results to be performed without the need for imputation. A completeness threshold $\tau$ was defined, and only parameters with a proportion of missing values less than $\tau$ were included in the PCA. The raw results of all small-sample PCA runs are included in \autoref{sec:appendix_a}.
+Given the high proportion of missing values in many of the numerical parameters, a small-sample PCA approach was adopted to perform an initial, exploratory analysis. This method involved selecting a subset of the data that contained complete cases for a chosen set of parameters, allowing a trial run of PCA for initial results to be performed without the need for imputation. A NaN limit $\tau$ was defined, and only parameters with a proportion of missing values less than $\tau$ were included in the PCA. The raw results of all small-sample PCA runs are included in \autoref{sec:appendix_a}.
 
 Small-sample PCA with $\tau = 0.50$ yielded 2,359 rows of data with 5 principal components that together explained 93.21\% of the variance.
 \begin{enumerate}
