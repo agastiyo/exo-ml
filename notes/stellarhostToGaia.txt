@@ -1,0 +1,12 @@
+STELLARHOSTS / GAIA
+st_teff / teff_gspphot
+st_rad / radius_gspphot
+st_mass / mass_flame
+st_met_FeH / fem_gspspec * mh_gspspec (multiply these two)
+st_lum / lum_flame
+st_logg / logg_msc1
+st_age / age_flame
+st_dens / 
+st_vsin / vsini_esphs
+st_rotp /
+st_radv /
