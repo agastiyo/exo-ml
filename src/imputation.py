@@ -19,7 +19,7 @@ gaia_arrays = {
   "st_vsin": np.load(f"{gaia_dir}/vsini.npy")
 }
 
-X_colNames = gaia_arrays.keys()
+X_colNames = list(gaia_arrays.keys())
 feature_cols = ['sy_pnum', 'sy_snum', *X_colNames]
   
 #%%
@@ -28,7 +28,6 @@ feature_cols = ['sy_pnum', 'sy_snum', *X_colNames]
 X = df[feature_cols].to_numpy()
 isImputed = np.isnan(X)
 
-# %%
 # Next, we must initialize the missing values using the real Gaia distribution of stellar parameters.
 df_imputed = df.copy()
 
@@ -55,7 +54,9 @@ X = df_imputed[feature_cols].to_numpy(dtype=np.float32)
 # We now have a data matrix X with missing values initilaized from the Gaia distribution.
 # We also have a mask isImputed that stores which values are original and which are imputed.
 # With these, we can go ahead and implement the regression step
-n_iters = 50
+n_iters = 1000
+save_every = 10
+sample_dir = "data/imputed"
 rmse_hist = []
 
 # Define the ranges to constrain the predicted draws to
@@ -77,18 +78,12 @@ for i, col in enumerate(X_colNames):
   clip_bounds[i+2] = bounds[col]
   
 # Find out the indexes of observed and missing data for each col
-missing_rows = []
-observed_rows = []
-
-for col in range(X.shape[1]):
-  missing_rows.append(np.where(isImputed[:, col])[0])
-  observed_rows.append(np.where(~isImputed[:, col])[0])
+missing_rows = [np.where(isImputed[:, i])[0] for i in range(X.shape[1])]
+observed_rows = [np.where(~isImputed[:, i])[0] for i in range(X.shape[1])]
   
 # Compute the indices used as predictors
-predictor_cols = []
-
-for col in range(X.shape[1]):
-  predictor_cols.append([i for i in range(X.shape[1]) if i != col])
+p = X.shape[1]
+predictor_cols = [np.delete(np.arange(p), i) for i in range(p)]
 
 # Create the random forest regressors
 forests = [
@@ -97,7 +92,7 @@ forests = [
 ]
 
 for i in range(n_iters):
-  X_old = X.copy()
+  sqdiff = []
   
   for col in range(X.shape[1]):
     miss = missing_rows[col]
@@ -138,10 +133,13 @@ for i in range(n_iters):
 
     # Update matrix
     X[miss, col] = y_new
+    
+    sqdiff.append((X[miss, col] - y_old)**2)
   
-  diff = X - X_old
-  diff = diff[isImputed]
-  rmse_hist.append(np.sqrt(np.mean(diff**2)))
+  rmse_hist.append(np.sqrt(np.mean(np.concatenate(sqdiff))))
+  
+  if (i + 1) % save_every == 0:
+    np.save(f"{sample_dir}/imputed_iter_{i+1}.npy", X)
   
   print(f"Iteration {i+1}/{n_iters} done")
 
@@ -149,5 +147,4 @@ for i in range(n_iters):
 # Convergence analysis of the regression step
 plt.plot(np.arange(1,n_iters+1),rmse_hist)
 plt.title("Root Mean Squared Error between iterations")
-
 # %%
