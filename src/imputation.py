@@ -55,7 +55,7 @@ X = df_imputed[feature_cols].to_numpy(dtype=np.float32)
 # We also have a mask isImputed that stores which values are original and which are imputed.
 # With these, we can go ahead and implement the regression step
 n_iters = 1000
-save_every = 10
+save_every = 5
 sample_dir = "data/imputed"
 rmse_hist = []
 
