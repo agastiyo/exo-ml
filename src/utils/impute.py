@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import clone
 
-def PseudoGibbsImputer(X, X_initializer, regressor:RandomForestRegressor, save_directory, n_iters=20, save_every=5, initializer_bins=100):
+def PseudoGibbsImputer(X, X_initializer, regressor:RandomForestRegressor, save_directory,initializer_bins=100, n_iters=20, save_every=5, stochastic_strength = 1):
   
   X = X.copy()
   
@@ -78,21 +78,28 @@ def PseudoGibbsImputer(X, X_initializer, regressor:RandomForestRegressor, save_d
       
       yPredicted_mpp = rf.predict(Y_mpnegp)
       
+      # Calculate the std using the current imputed values and the prediction by the random forest
+      # The std is then scaled by the defined stochastic strength of the algorithm
+      # A std of 0 won't work, so a very small offset is added
       sigma = np.sqrt(np.mean( (y_mpp - yPredicted_mpp) ** 2 ))
+      sigma *= stochastic_strength
       sigma = max(sigma, 1e-6)
       
+      # The new values are drawn and clipped to a physical range if needed
       yNew_mpp = np.random.normal(loc=yPredicted_mpp, scale=sigma)
       lo, hi = bounds[p]
       yNew_mpp = np.clip(yNew_mpp, lo, hi)
       
+      # The new values 
       X[mp,p] = yNew_mpp
       
       sqdiff.append( (X[mp,p] - y_mpp) ** 2 )
     
     rmse_hist.append(np.sqrt(np.mean(np.concatenate(sqdiff))))
     
-    if (i + 1) % save_every == 0:
-      np.save(f"{save_directory}/imputed_iter_{i+1}.npy", X)
+    if save_directory:
+      if (i + 1) % save_every == 0:
+        np.save(f"{save_directory}/imputed_iter_{i+1}.npy", X)
     
     print(f"Iteration {i+1}/{n_iters} done")
   
