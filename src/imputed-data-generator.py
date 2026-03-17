@@ -9,7 +9,7 @@ from src.utils.impute import PseudoGibbsImputer
 df = pd.read_csv('data/cleaned/STELLARHOSTS.csv',comment='#') # Stellarhost dataframe
 gaia_dir = "data/cleaned/gaia_arrays"
 save_dir = "data/imputed"
-feature_cols = ['sy_pnum', 'sy_snum', 'st_teff', 'st_rad', 'st_mass', 'st_met_FeH', 'st_lum', 'st_logg', 'st_age', 'st_vsin']
+feature_cols = ['sy_pnum', 'sy_snum', 'st_teff', 'st_rad', 'st_mass', 'st_met_FeH', 'st_lum', 'st_logg', 'st_age']
 # This is the order the features will be organized in the data matrix X, so make sure that the initializer matrix has the features in the same order
 
 # Build data matrix X
@@ -26,8 +26,7 @@ rows = [
   np.load(f"{gaia_dir}/feh.npy"),
   np.load(f"{gaia_dir}/lum.npy"),
   np.load(f"{gaia_dir}/logg.npy"),
-  np.load(f"{gaia_dir}/age.npy"),
-  np.load(f"{gaia_dir}/vsini.npy"),
+  np.load(f"{gaia_dir}/age.npy")
 ]
 
 max_len = max(r.size for r in rows)
@@ -43,7 +42,7 @@ X_init = X_init.T
 regressor = RandomForestRegressor(n_estimators=50, n_jobs=-1)
 
 # Run the imputation algorithm
-rmse_hist = PseudoGibbsImputer(X,X_init,regressor,save_dir,n_iters=1000,save_every=5)
+rmse_hist = PseudoGibbsImputer(X,X_init,regressor,save_dir,n_iters=500,save_every=5)
 
 #%%
 # Plot convergence graph

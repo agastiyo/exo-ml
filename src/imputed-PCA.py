@@ -58,7 +58,7 @@ std_eigenvalues = std_explained * total_variance
 feature_names = [
   'sy_pnum','sy_snum',
   'st_teff','st_rad','st_mass','st_met_FeH',
-  'st_lum','st_logg','st_age','st_vsin'
+  'st_lum','st_logg','st_age'
 ]
 
 for i in range(components.shape[1]):
