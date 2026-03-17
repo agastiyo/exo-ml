@@ -1,7 +1,7 @@
 #%%
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import StandardScaler
+import src.utils.pca as PCA
 
 #%%
 df = pd.read_csv('data/cleaned/STELLARHOSTS.csv',comment='#')
@@ -34,7 +34,6 @@ X = Xt.T
 
 # Try running PCA on a smaller dataset where only rows with all dimensions known are considered.
 X_known = X[np.isfinite(X).all(axis=1)]
-Xt_known = X_known.T
 print(X_known.shape)
 print(f"Optimal sample size for this dataset is {2**X_known.shape[1]}.")
 print(f"tau = {tau} yields {X_known.shape[0]} complete rows")
@@ -42,33 +41,11 @@ if X_known.shape[0] == 0:
   raise ValueError("No complete data to conduct PCA on!")
 
 # %%
-# Standardize each column in X_known and Xt_known before PCA
-scaler = StandardScaler()
-X_known_standard = scaler.fit_transform(X_known)
-Xt_known_standard = X_known_standard.T
+# Run PCA
+eigvals, eigvecs = PCA.RunPCA(X_known)
 
-# Compute the covariance matrix
-C_known = (1 / (X_known_standard.shape[1] - 1)) * (Xt_known_standard @ X_known_standard)
-
-# Perform PCA on the covariance matrix C_known
-# Compute eigenvalues and eigenvectors of the covariance matrix
-eigenvalues, eigenvectors = np.linalg.eig(C_known)
-
-# Sort eigenvalues and eigenvectors in descending order of eigenvalues
-sorted_indices = np.argsort(eigenvalues)[::-1]
-eigenvalues = eigenvalues[sorted_indices]
-eigenvectors = eigenvectors[:, sorted_indices]
-
+# Print PCs
 feature_names = ['# of Planets', '# of Stars', 'T_eff', 'Radius', 'Mass', 'Fe/H','log g','age','density']
+PCA.printPCs(eigvals, eigvecs, feature_names)
 
-# Print a summary of each principal component
-total_variance = np.sum(eigenvalues)
-for i, eigenvalue in enumerate(eigenvalues):
-  proportion_variance = eigenvalue / total_variance
-  print(f"Principal Component {i + 1}:")
-  print(f"  Eigenvalue: {eigenvalue:.4f}")
-  print(f"  Proportion of Variance: {proportion_variance:.4%}")
-  print("  Contribution of Features:")
-  for feature, contribution in zip(feature_names, eigenvectors[:, i]):
-    print(f"{feature:>20}: {contribution:>7.4f}")
 # %%

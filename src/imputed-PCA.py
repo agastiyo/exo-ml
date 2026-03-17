@@ -1,7 +1,7 @@
 #%%
 import numpy as np
 import glob
-from sklearn.preprocessing import StandardScaler
+import src.utils.pca as PCA
 
 #%%
 files = sorted(glob.glob("data/imputed/imputed_iter_*.npy"))
@@ -9,59 +9,28 @@ samples = [np.load(f) for f in files]
 
 stack = np.stack(samples)
 
-n_components = 10
-
-pcs = []
 components = []
 explained = []
 
 for X in samples:
+  eigvals, eigvecs = PCA.RunPCA(X)
 
-    scaler = StandardScaler()
-    X_standard = scaler.fit_transform(X)
-    Xt_standard = X_standard.T
+  var_ratio = eigvals / np.sum(eigvals)
 
-    # Covariance matrix
-    C_known = (1 / (X_standard.shape[0] - 1)) * (Xt_standard @ X_standard)
-
-    # Eigen decomposition
-    eigenvalues, eigenvectors = np.linalg.eig(C_known)
-
-    # Sort descending
-    sorted_indices = np.argsort(eigenvalues)[::-1]
-    eigenvalues = eigenvalues[sorted_indices]
-    eigenvectors = eigenvectors[:, sorted_indices]
-
-    # Keep first n components
-    eigvals_k = eigenvalues[:n_components]
-    eigvecs_k = eigenvectors[:, :n_components]
-
-    # Explained variance ratio
-    var_ratio = eigvals_k / np.sum(eigenvalues)
-
-    # Project data into PCA space
-    Z = X_standard @ eigvecs_k
-
-    pcs.append(Z)
-    components.append(eigvecs_k.T)
-    explained.append(var_ratio)
-
+  components.append(eigvecs.T)
+  explained.append(var_ratio)
 
 # Convert to arrays
-pcs = np.stack(pcs)
 components = np.stack(components)
 explained = np.stack(explained)
-
 
 # --- Align component signs to first solution ---
 ref = components[0]
 
 for i in range(1, components.shape[0]):
-    for k in range(n_components):
+    for k in range(components.shape[1]):
         if np.dot(components[i, k], ref[k]) < 0:
             components[i, k] *= -1
-            pcs[i, :, k] *= -1
-
 
 # --- Combine results across imputations ---
 
@@ -72,11 +41,6 @@ std_components = components.std(axis=0)
 # Mean explained variance
 mean_explained = explained.mean(axis=0)
 std_explained = explained.std(axis=0)
-
-# Mean PCA coordinates for each row
-mean_scores = pcs.mean(axis=0)
-std_scores = pcs.std(axis=0)
-
 
 print("Mean explained variance:")
 print(mean_explained)
@@ -97,7 +61,7 @@ feature_names = [
   'st_lum','st_logg','st_age','st_vsin'
 ]
 
-for i in range(n_components):
+for i in range(components.shape[1]):
   print(f"\nPrincipal Component {i+1}")
   print("-"*40)
 
