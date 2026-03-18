@@ -24,11 +24,14 @@ df = pd.read_csv(gaia_path, usecols=cols.values(), comment="#", low_memory=False
 
 # metallicity combination
 feh = (df["fem_gspspec"] * df["mh_gspspec"]).dropna().to_numpy()
-
 np.save(f"{out_dir}/feh.npy", feh.astype(np.float32))
 
+# Luminosity correction to match STELLARHOST data
+lum = np.log10( df["lum_flame"].dropna().to_numpy() )
+np.save(f"{out_dir}/lum.npy", lum.astype(np.float32))
+
 for key, col in cols.items():
-  if col in ["fem_gspspec", "mh_gspspec"]:
+  if col in ["fem_gspspec", "mh_gspspec","lum_flame"]:
     continue
 
   data = df[col].dropna().to_numpy().astype(np.float32)

@@ -1,5 +1,4 @@
 #%%
-import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -18,8 +17,12 @@ gaia_arrays = {
 }
 
 # %%
-plt.hist(gaia_arrays["st_met_FeH"],bins=480)
+plt.hist(gaia_arrays["st_lum"],bins=480)
 plt.yscale('log')
 plt.ylabel("log Count")
 
+# %%
+plt.hist(10**gaia_arrays["st_lum"],bins=480)
+plt.yscale('log')
+plt.ylabel("log Count")
 # %%
