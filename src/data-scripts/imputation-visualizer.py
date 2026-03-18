@@ -13,24 +13,12 @@ feature_cols = [
   'st_lum','st_logg','st_age'
 ]
 
-gaia_arrays = {
-  "st_teff": np.load(f"{gaia_dir}/teff.npy"),
-  "st_rad": np.load(f"{gaia_dir}/radius.npy"),
-  "st_mass": np.load(f"{gaia_dir}/mass.npy"),
-  "st_met_FeH": np.load(f"{gaia_dir}/feh.npy"),
-  "st_lum": np.load(f"{gaia_dir}/lum.npy"),
-  "st_logg": np.load(f"{gaia_dir}/logg.npy"),
-  "st_age": np.load(f"{gaia_dir}/age.npy"),
-  "st_vsin": np.load(f"{gaia_dir}/vsini.npy")
-}
-
 X_orig = df[feature_cols].to_numpy()
 
 #%%
-it = '490'
+it = '355'
 X_imp = np.load(f"data/imputed/imputed_iter_{it}.npy")
 
-#%%
 fig, axes = plt.subplots(9, 1, figsize=(7, 25))
 
 for i, ax in enumerate(axes.flatten()):
@@ -47,11 +35,11 @@ plt.tight_layout()
 plt.show()
 #%%
 cell_hist = []
-dataset_range = np.arange(10,510,10)
+dataset_range = np.arange(15,55,5)
 
 for i in dataset_range:
   X_imp = np.load(f"data/imputed/imputed_iter_{i}.npy")
-  cell_hist.append(X_imp[40][4])
+  cell_hist.append(X_imp[0][7])
 
 plt.plot(cell_hist)
 print(cell_hist)

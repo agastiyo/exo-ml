@@ -55,6 +55,7 @@ mean_eigenvalues = mean_explained * total_variance
 std_eigenvalues = std_explained * total_variance
 
 # Print PCA summary
+# Make sure that the feature names are in the correct order
 feature_names = [
   'sy_pnum','sy_snum',
   'st_teff','st_rad','st_mass','st_met_FeH',

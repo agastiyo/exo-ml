@@ -42,11 +42,14 @@ X_init = X_init.T
 regressor = RandomForestRegressor(n_estimators=50, n_jobs=-1)
 
 # Run the imputation algorithm
-rmse_hist = PseudoGibbsImputer(X,X_init,regressor,save_dir,n_iters=500,save_every=5)
+rmse_hist = PseudoGibbsImputer(X,X_init,regressor,save_dir,tot_iters=500,burn_in=30,thinning=5)
 
 #%%
 # Plot convergence graph
 print(rmse_hist)
 plt.plot(range(len(rmse_hist)),rmse_hist)
 plt.title("Root Mean Squared Error between iterations")
+# %%
+for item in rmse_hist:
+  print(item)
 # %%

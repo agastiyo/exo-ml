@@ -1,8 +1,9 @@
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import clone
+from scipy.stats import truncnorm
 
-def PseudoGibbsImputer(X, X_initializer, regressor:RandomForestRegressor, save_directory,initializer_bins=100, n_iters=20, save_every=5, stochastic_strength = 1):
+def PseudoGibbsImputer(X, X_initializer, regressor:RandomForestRegressor, save_directory,initializer_bins=100,tot_iters=500,burn_in=20,thinning=10,weight_strength=1.0,stochastic_strength=0.25):
   
   X = X.copy()
   
@@ -38,11 +39,14 @@ def PseudoGibbsImputer(X, X_initializer, regressor:RandomForestRegressor, save_d
   # Define the ranges to constrain predicted draws in
   bounds = {}
   for col in range(num_features):
-    data = X_initializer[:,col]
-    data = data[~np.isnan(data)]
+    init_data = X_initializer[:,col]
+    init_data = init_data[~np.isnan(init_data)]
     
-    lo = np.percentile(data, 0.5)
-    hi = np.percentile(data, 99.5)
+    og_data = X[:,col]
+    og_data = og_data[~np.isnan(og_data)]
+    
+    lo = min(np.min(init_data), np.min(og_data))
+    hi = max(np.max(init_data), np.max(og_data))
     
     bounds[col] = (lo, hi)
   
@@ -54,8 +58,8 @@ def PseudoGibbsImputer(X, X_initializer, regressor:RandomForestRegressor, save_d
   predictor_cols = [np.delete(np.arange(num_features), i) for i in range(num_features)]
   
   forests = [ clone(regressor) for _ in range(X.shape[1]) ]
-  
-  for i in range(n_iters):
+
+  for i in range(tot_iters):
     sqdiff = []
     
     for p in range(num_features):
@@ -73,8 +77,18 @@ def PseudoGibbsImputer(X, X_initializer, regressor:RandomForestRegressor, save_d
       Y_mpnegp = X[mp][:,negp]
       Y_opnegp = X[op][:,negp]
       
+      # Training the random forest
+      # The weight of each row is determined as (# of observed values / total values in the row)
+      # This allows for rows with more observed values to be weighted more than rows with mostly imputed values.
       rf = forests[p]
-      rf.fit(Y_opnegp,y_opp)
+      
+      isImputed_opnegp = isImputed[op][:, negp] # This is the mask matrix of Y_opnegp
+      num_observed = (~isImputed_opnegp).sum(axis=1) # The number of observed values in each row
+      row_weights = num_observed / len(negp)
+      row_weights = row_weights ** weight_strength # Scale the strength of the row weights
+      row_weights = np.clip(row_weights, 1e-6, 1) # A weight of 0 won't work, so a very small offset is added. Max should be 1
+      
+      rf.fit(Y_opnegp, y_opp, sample_weight=row_weights)
       
       yPredicted_mpp = rf.predict(Y_mpnegp)
       
@@ -85,10 +99,13 @@ def PseudoGibbsImputer(X, X_initializer, regressor:RandomForestRegressor, save_d
       sigma *= stochastic_strength
       sigma = max(sigma, 1e-6)
       
-      # The new values are drawn and clipped to a physical range if needed
-      yNew_mpp = np.random.normal(loc=yPredicted_mpp, scale=sigma)
+      # The new values are drawn from a truncated normal
       lo, hi = bounds[p]
-      yNew_mpp = np.clip(yNew_mpp, lo, hi)
+      
+      a = (lo - yPredicted_mpp) / sigma
+      b = (hi - yPredicted_mpp) / sigma
+
+      yNew_mpp = truncnorm.rvs(a, b, loc=yPredicted_mpp, scale=sigma)
       
       # The new values 
       X[mp,p] = yNew_mpp
@@ -98,9 +115,9 @@ def PseudoGibbsImputer(X, X_initializer, regressor:RandomForestRegressor, save_d
     rmse_hist.append(np.sqrt(np.mean(np.concatenate(sqdiff))))
     
     if save_directory:
-      if (i + 1) % save_every == 0:
+      if (i+1)%thinning == 0 and (i+1) > burn_in:
         np.save(f"{save_directory}/imputed_iter_{i+1}.npy", X)
     
-    print(f"Iteration {i+1}/{n_iters} done")
+    print(f"Iteration {i+1}/{tot_iters} done")
   
   return rmse_hist
