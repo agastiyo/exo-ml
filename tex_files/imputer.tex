@@ -1,0 +1,123 @@
+\documentclass[preprint]{aastex631}
+
+\begin{document}
+\title{GSimp-RF+: A Weighted Stochastic Random Forest Imputation Method}
+\author{Agastya Gaur}
+\noaffiliation
+
+\section{Introduction}
+
+The GSimp-RF+ method is an extension of GSimp \citep{weiGSimpGibbsSampler2018} based on the MissForest imputation method \citep{stekhovenMissForestnonparametricMissingValue2012}. GSimp-RF+ incorporates a weighted stochastic random forest approach to impute missing values in datasets. The method iteratively builds random forests to predict missing values, while also incorporating a weighting scheme to improve the accuracy of the imputation. This approach allows for better handling of complex relationships between variables and can lead to more accurate imputations compared to traditional methods.
+
+GSimp-RF+ is particularly useful in scenarios where the data has a high degreee of missingness and when variables are non-linearly related. By leveraging the strengths of random forests and incorporating a weighting mechanism, GSimp-RF+ can provide more robust and reliable imputations, ultimately improving the quality of the data for subsequent analyses.
+
+\section{Methodology}
+
+\subsection{Notation}
+A dataset of $N$ samples and $P$ features can be represented as the data matrix $\mathbf{X} \in \mathbb{R}^{N \times P}$. $\mathbf{X}$ may contain a number of missing values, represented as \verb|NaN|.
+
+The column $\mathbf{x}_p \in \mathbb{R}^N$ represents feature $p$. Each feature $p$ has observed values $op$ and missing $mp$ defined as
+\begin{equation}
+  op = \{i \in \{1,\dots,N\} : \mathbf{X}_{i,p} \text{ observed} \}
+\end{equation}
+\begin{equation}
+  mp = \{i \in \{1,\dots,N\} : \mathbf{X}_{i,p} \text{ missing} \}
+\end{equation}
+The length of these lists are denoted as $|op|$ and $|mp|$. The observed values of feature $p$ are represented as $\mathbf{x}_{op,p} \in \mathbb{R}^{|op|}$, while the missing values are represented as $\mathbf{x}_{mp,p} \in \mathbb{R}^{|mp|}$.
+
+The matrix $\mathbf{X}_{-p} \in \mathbb{R}^{N\times(P-1)}$ represents the remaining features in the dataset, excluding feature $p$. The rows in this matrix corresponding to the the observed and missing values of feature $p$ are denoted as $\mathbf{X}_{op,-p} \in \mathbb{R}^{|op|\times (P-1)}$ and $\mathbf{X}_{mp,-p} \in \mathbb{R}^{|mp| \times (P-1)}$, respectively.
+
+\subsection{Initialization}
+Each feature $p$ in $\mathbf{X}$ is assumed to have a an empirical distribution derived from external or observed data. Draws from this distribution can be arranged into an initializer matrix $\mathbf{X}^{init} \in \mathbb{R}^{M \times P}$, where $M$ is the number of draws from the prior distribution. In the case that there are different numbers of draws for different features, $M$ takes the value of the maximum number of draws across all features and the rest of the initializer values can be padded with \verb|NaN|.
+
+Missing values in $\mathbf{X}$ are the initialized with a random draw from the corresponding feature's initializer column in $\mathbf{X}^{init}$. This results in a full matrix $\mathbf{X^{(0)}}$, though the indices of the imputed values $mp$ are still tracked for each feature.
+
+\subsection{Iteration}
+The initialized matrix $\mathbf{X^{(0)}}$ is the first matrix in a series of a set number $T$ of iterations. Each iteration $t$, the GSimp-RF+ method imputes the missing values for each feature $p$ in the dataset using a Random Forest Regression step and a Stochastic Draw step. One iteration of the method consists of performing these steps for each feature in the dataset. The steps are described below.
+
+\subsection{Random Forest Regression}
+Similar to MissForest \citep{stekhovenMissForestnonparametricMissingValue2012}, a random forest regression model can be trained to predict $\mathbf{x}^{(t+1)}_{mp,p}$ given the initialized matrix. The model is trained on the observed values $\mathbf{x}_{op,p}$ as the target variable and the corresponding rows of the other features $\mathbf{X}^{(t)}_{op,-p}$ as the predictor variables. The biggest divergence between MissForest and GSimp-RF+ is that the latter incorporates a weighting scheme to improve the accuracy of the imputation. Each row of the predictor variables $\mathbf{X}^{(t)}_{op,-p}$ is assigned a weight based on the proportion of missing values in the row. Explicitly, the weight for row $i$ is calculated as
+\begin{equation}
+  w_i = \left(\frac{\sum_{j \neq p} \mathbf{1}_{\{\mathbf{X}_{i,j} \text{ observed}\}}}{P-1}\right)^\alpha
+\end{equation}
+where $\alpha$ is a hyperparameter that controls the influence of the weighting scheme. A higher value of $\alpha$ gives more weight to more complete rows. With this weighting scheme, the Random Forest reduces bias introduced by previously imputed values by downweighting rows with high imputation uncertainty. The weights do not change across iterations.
+
+Given the target and predictor variables, along with the weights, a random forest regression model $\hat{f}^{(t)}_p : \mathbb{R}^{P-1} \rightarrow \mathbb{R}$ can be trained. Formally, for each iteration $t$,
+\begin{equation}
+  \hat{f}^{(t)}_p = \text{RF}\left(\mathbf{X}^{(t)}_{op,-p}, \mathbf{x}^{(t)}_{op,p},w\right)
+\end{equation}
+The random forest is then applied row-wise to predict new values $\mathbf{x}^{pred}_{mp,p}$.
+\begin{equation}
+  \mathbf{x}^{pred,(t)}_{mp,p} = \hat{f}^{(t)}_p(\mathbf{X}^{(t)}_{mp,-p})
+\end{equation}
+
+\subsection{Stochastic Step}
+In the original GSimp method \citep{weiGSimpGibbsSampler2018}, the variance between the predicted values $\mathbf{x}^{pred}_{mp,p}$ and the old imputed values $\mathbf{x}^{(t)}_{mp,p}$ is calculated:
+\begin{equation}
+  \left(\sigma^{(t)}_p\right)^2 = \frac{1}{|mp|} \sum_{mp} (\mathbf{x}^{pred,(t)}_{mp,p} - \mathbf{x}^{(t)}_{mp,p})^2
+\end{equation}
+This variance is then used to draw new imputed values from a truncated normal distribution. GSimp was originally designed for left-censored missing values, so the truncation point is set to the minimum observed value of feature $p$. However, in GSimp-RF+, the both a lower and upper truncation point is set. The lower bound is defined as the minimum between the minimum observed value of feature $p$ and the minimum initializer value for feature $p$. Similarly, the upper bound is defined as the maximum between the maximum observed value of feature $p$ and the maximum initializer value for feature $p$. Formally,
+\begin{equation}
+  \text{lo}_p = \min(\min(\mathbf{X}_{op,p}), \min(\mathbf{X}^{init}_p))
+\end{equation}
+\begin{equation}
+  \text{hi}_p = \max(\max(\mathbf{X}_{op,p}), \max(\mathbf{X}^{init}_p))
+\end{equation}
+
+The mean of the truncated normal is set to $\mathbf{x}^{pred,(t)}_{mp,p}$, the predicted values from the random forest regression. New imputed values $\mathbf{x}^{(t+1)}_{mp,p}$ are drawn from this truncated normal distribution.
+\begin{equation}
+  \mathbf{x}^{(t+1)}_{mp,p} \sim \text{TruncNormal}(\mathbf{x}^{pred,(t)}_{mp,p}, \beta\sigma^{(t)}_p, \text{lo}_p, \text{hi}_p)
+\end{equation}
+where $\beta$ is a hyperparameter that controls the strength of the stochastic step. A higher value of $\beta$ results in more variance in the new imputed values, which can help to escape local minima but may also introduce more noise.
+
+\subsection{Output}
+The new imputed values $\mathbf{x}^{(t+1)}_{mp,p}$ for every feature are then combined with $\mathbf{x}_{op,p}$ to create the data matrix $\mathbf{X}^{(t+1)}$. One iteration of the GSimp-RF+ method consists of performing the random forest regression and stochastic step for each feature in the dataset. The process is repeated until a set number of iteration is reached. The sequence $\{\mathbf{X}^{(t)}\}$ then forms a Markov chain over the space of completed datasets.
+
+Intermediate snapshots of the data matrix can be taken at the every few iterations to create a thinned sequence. The final imputed dataset can be obtained by averaging the imputed values the thinned sequence, or by taking the imputed values from the last iteration.
+
+\subsection{Hyperparameters}
+The GSimp-RF+ method has two main hyperparameters: $\alpha$ and $\beta$. The hyperparameter $\alpha$ controls the influence of the weighting scheme in the random forest regression. A higher value of $\alpha$ gives more weight to more complete rows, causing the regressor to stick more closely to the observed data, reducing the influence of possible noise from rows with mostly imputed values, but may also reduce the ability of the model to potentially overcome observational bias.
+
+The hyperparameter $\beta$ controls the strength of the stochastic step. A higher value of $\beta$ results in more variance in the new imputed values, which can help to escape local minima but may also introduce more noise, hindering convergence and potentially leading to worse imputation performance.
+
+The initializer matrix $\mathbf{X}^{init}$ can also be considered a hyperparameter, as the choice of prior distribution and the number of draws can influence the imputation results. Using a more informative prior distribution can lead to better initial imputations, which may improve the overall performance of the GSimp-RF+ method. If the prior distribution ovecomes any observational bias in the original data, it may allow GSimp-RF+ to overcome observational bias as well. However, if the prior distribution is not well-chosen, it may introduce additional bias into the imputation process.
+
+\subsection{Convergence}
+Convergence of the GSimp-RF+ method can be assessed by monitoring the change in imputed values across iterations. The approach employed by the algorithm is to calculate the root mean squared difference between the imputed values of the current iteration and the previous iteration. Due to the stochastic updates, convergence should be interpreted as the chain reaching a stationary distribution rather than a fixed point.
+
+The algorithm does not have a formal convergence criterion, and the number of iterations can be set as a hyperparameter. This is due to the stochastic nature of the method, which may cause the imputed values to fluctuate across iterations. However, if the root mean squared difference between iterations falls below a certain threshold, it can be an indication that the imputed values have stabilized and that the algorithm has converged.
+
+Usually, a high amount of missingness in the data, high values for beta, or low values for alpha can hinder convergence and cause significant fluctuations in the imputed values across iterations. As such, it is important to carefully choose the hyperparameters and monitor the convergence of the algorithm to ensure that the algorithm is performing as expected.
+
+Data with low missingness tends to be able to handle higher values of $\beta$ and lower values of $\alpha$ without hindering convergence, as the imputation process is less reliant on the stochastic step and more guided by the observed data.
+
+\section{Comparison}
+
+The GSimp-RF+ method is best understood as a hybrid between deterministic Random Forest imputation (MissForest) and stochastic Gibbs-style imputation (GSimp). Compared to existing methods, GSimp-RF+ introduces three main innovations:
+
+\begin{enumerate}
+  \item \textbf{Weighted Learning} - Rows with high imputation uncertainty are downweighted, reducing the propgation of imputation noise or errors across iterations.
+  \item \textbf{Stochastic Conditional Sampling} - Produces a distribution of plausible values instead of point estimates, enabling uncertainty-aware analysis.
+  \item \textbf{Bounded Imputation} - Enforces physically meaningful ranges.
+\end{enumerate}
+
+\autoref{tab:comparison} compares GSimp-RF+ to similar models. Overall, GSimp-RF+ occupies a middle ground between deterministic tree-based imputers such as MissForest and stochastic regression-based methods such as GSimp and MICE. By combining Random Forest conditional modeling with stochastic truncated sampling and row-wise weighting, it provides a flexible framework for imputing nonlinear, bounded, and partially observed scientific data while preserving uncertainty.
+
+\begin{table}
+  \centering
+  \begin{tabular}{lllll}
+    \hline
+    \textbf{Method} & \textbf{Model} & \textbf{Stochastic} & \textbf{Bounded} & \textbf{Weighted} \\
+    \hline
+    GSimp-RF+ & RF & Yes & Yes & Two-sided \\
+    MissForest & RF & No & No & No \\
+    GSimp & Linear & Yes & No & Left-trunc \\
+  \end{tabular}
+  \caption{A comaprison of GSimp-RF+ to similar imputation methods}
+  \label{tab:comparison}
+\end{table}
+
+
+\bibliography{references}
+
+\end{document}
