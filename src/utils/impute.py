@@ -120,4 +120,4 @@ def PseudoGibbsImputer(X, X_initializer, regressor:RandomForestRegressor, save_d
     
     print(f"Iteration {i+1}/{tot_iters} done")
   
-  return rmse_hist
+  return X,rmse_hist

@@ -42,7 +42,7 @@ X_init = X_init.T
 regressor = RandomForestRegressor(n_estimators=50, n_jobs=-1)
 
 # Run the imputation algorithm
-rmse_hist = PseudoGibbsImputer(X,X_init,regressor,save_dir,tot_iters=500,burn_in=30,thinning=5)
+X_imputed,rmse_hist = PseudoGibbsImputer(X,X_init,regressor,save_dir,tot_iters=500,burn_in=30,thinning=5)
 
 #%%
 # Plot convergence graph
