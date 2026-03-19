@@ -1,5 +1,6 @@
 tex_files/output
-/data
+data/*
+!data/cleaned
 /imgs
 __pycache__
 .DS_Store
