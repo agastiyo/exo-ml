@@ -33,7 +33,7 @@ Each feature $p$ in $\mathbf{X}$ is assumed to have a an empirical distribution 
 Missing values in $\mathbf{X}$ are the initialized with a random draw from the corresponding feature's initializer column in $\mathbf{X}^{init}$. This results in a full matrix $\mathbf{X^{(0)}}$, though the indices of the imputed values $mp$ are still tracked for each feature.
 
 \subsection{Iteration}
-The initialized matrix $\mathbf{X^{(0)}}$ is the first matrix in a series of a set number $T$ of iterations. Each iteration $t$, the GSimp-RF+ method imputes the missing values for each feature $p$ in the dataset using a Random Forest Regression step and a Stochastic Draw step. One iteration of the method consists of performing these steps for each feature in the dataset. The steps are described below.
+The initialized matrix $\mathbf{X^{(0)}}$ is the first matrix in a series of a set number $T$ of iterations. Each iteration $t$, the GSimp-RF+ method imputes the missing values for each feature $p$ in the dataset using a Random Forest Regression step and $k$ Stochastic Draw steps. One iteration of the method consists of performing these steps for each feature in the dataset. The steps are described below.
 
 \subsection{Random Forest Regression}
 Similar to MissForest \citep{stekhovenMissForestnonparametricMissingValue2012}, a random forest regression model can be trained to predict $\mathbf{x}^{(t+1)}_{mp,p}$ given the initialized matrix. The model is trained on the observed values $\mathbf{x}_{op,p}$ as the target variable and the corresponding rows of the other features $\mathbf{X}^{(t)}_{op,-p}$ as the predictor variables. The biggest divergence between MissForest and GSimp-RF+ is that the latter incorporates a weighting scheme to improve the accuracy of the imputation. Each row of the predictor variables $\mathbf{X}^{(t)}_{op,-p}$ is assigned a weight based on the proportion of missing values in the row. Explicitly, the weight for row $i$ is calculated as
@@ -46,15 +46,16 @@ Given the target and predictor variables, along with the weights, a random fores
 \begin{equation}
   \hat{f}^{(t)}_p = \text{RF}\left(\mathbf{X}^{(t)}_{op,-p}, \mathbf{x}^{(t)}_{op,p},w\right)
 \end{equation}
-The random forest is then applied row-wise to predict new values $\mathbf{x}^{pred}_{mp,p}$.
-\begin{equation}
-  \mathbf{x}^{pred,(t)}_{mp,p} = \hat{f}^{(t)}_p(\mathbf{X}^{(t)}_{mp,-p})
-\end{equation}
 
 \subsection{Stochastic Step}
+Given a trained random forest $\hat{f}^{(t)}_p$ for every feature $p$, the stochastic step is repeated $K$ times. Starting with the data matrix outputted at the end of the previous iteration, the trained random forest is applied row-wise to predict new values $\mathbf{x}^{pred}_{mp,p}$.
+\begin{equation}
+  \mathbf{x}^{pred,(t,k)}_{mp,p} = \hat{f}^{(t)}_p(\mathbf{X}^{(t,k)}_{mp,-p})
+\end{equation}
+
 In the original GSimp method \citep{weiGSimpGibbsSampler2018}, the variance between the predicted values $\mathbf{x}^{pred}_{mp,p}$ and the old imputed values $\mathbf{x}^{(t)}_{mp,p}$ is calculated:
 \begin{equation}
-  \left(\sigma^{(t)}_p\right)^2 = \frac{1}{|mp|} \sum_{mp} (\mathbf{x}^{pred,(t)}_{mp,p} - \mathbf{x}^{(t)}_{mp,p})^2
+  \left(\sigma^{(t,k)}_p\right)^2 = \frac{1}{|mp|} \sum_{mp} (\mathbf{x}^{pred,(t,k)}_{mp,p} - \mathbf{x}^{(t,k)}_{mp,p})^2
 \end{equation}
 This variance is then used to draw new imputed values from a truncated normal distribution. GSimp was originally designed for left-censored missing values, so the truncation point is set to the minimum observed value of feature $p$. However, in GSimp-RF+, the both a lower and upper truncation point is set. The lower bound is defined as the minimum between the minimum observed value of feature $p$ and the minimum initializer value for feature $p$. Similarly, the upper bound is defined as the maximum between the maximum observed value of feature $p$ and the maximum initializer value for feature $p$. Formally,
 \begin{equation}
@@ -64,16 +65,23 @@ This variance is then used to draw new imputed values from a truncated normal di
   \text{hi}_p = \max(\max(\mathbf{X}_{op,p}), \max(\mathbf{X}^{init}_p))
 \end{equation}
 
-The mean of the truncated normal is set to $\mathbf{x}^{pred,(t)}_{mp,p}$, the predicted values from the random forest regression. New imputed values $\mathbf{x}^{(t+1)}_{mp,p}$ are drawn from this truncated normal distribution.
+The mean of the truncated normal is set to $\mathbf{x}^{pred,(t,k)}_{mp,p}$, the predicted values from the random forest regression. New imputed values $\mathbf{x}^{(t,k+1)}_{mp,p}$ are drawn from this truncated normal distribution.
 \begin{equation}
-  \mathbf{x}^{(t+1)}_{mp,p} \sim \text{TruncNormal}(\mathbf{x}^{pred,(t)}_{mp,p}, \beta\sigma^{(t)}_p, \text{lo}_p, \text{hi}_p)
+  \mathbf{x}^{(t,k+1)}_{mp,p} \sim \text{TruncNormal}(\mathbf{x}^{pred,(t,k)}_{mp,p}, \beta\sigma^{(t,k)}_p, \text{lo}_p, \text{hi}_p)
 \end{equation}
 where $\beta$ is a hyperparameter that controls the strength of the stochastic step. A higher value of $\beta$ results in more variance in the new imputed values, which can help to escape local minima but may also introduce more noise.
 
-\subsection{Output}
-The new imputed values $\mathbf{x}^{(t+1)}_{mp,p}$ for every feature are then combined with $\mathbf{x}_{op,p}$ to create the data matrix $\mathbf{X}^{(t+1)}$. One iteration of the GSimp-RF+ method consists of performing the random forest regression and stochastic step for each feature in the dataset. The process is repeated until a set number of iteration is reached. The sequence $\{\mathbf{X}^{(t)}\}$ then forms a Markov chain over the space of completed datasets.
+The new imputed values for each feature $\mathbf{x}^{(t,k+1)}_{mp,p}$ are combined with the original data matrix $\mathbf{X}$ to create $\mathbf{X}^{(t,k+1)}$. The random forest $\hat{f}^{(t)}_p$ is applied the new data matrix, and the drawing process is repeated.
 
-Intermediate snapshots of the data matrix can be taken at the every few iterations to create a thinned sequence. The final imputed dataset can be obtained by averaging the imputed values the thinned sequence, or by taking the imputed values from the last iteration.
+\subsection{Output}
+Finally, after $K$ draws are completed, the full iteration including the Random Forests and stochastic steps comes to an end. The data matrix $\mathbf{X}^{(t+1)}$ to train the next random forest is defined as
+\begin{equation}
+  \mathbf{X}^{(t+1)} = \mathbf{X}^{(t,K)}
+\end{equation}
+
+One iteration of the GSimp-RF+ method consists of performing the random forest regression and $K$ stochastic steps for each feature in the dataset. The process is repeated until a set number of iteration is reached. The sequence $\{\mathbf{X}^{(t)}\}$ then forms a Markov chain over the space of completed datasets.
+
+Snapshots of the data matrix are taken after every stochastic step to create a Markov chain of possible datasets. The final imputed dataset can be obtained by averaging the imputed values the sequence, and probability distributions can be obtained for each missing value as well. In this way, GSimp-RF+ not only calculates an imputed dataset, but also quantifies uncertainty for each missing value.
 
 \subsection{Hyperparameters}
 The GSimp-RF+ method has two main hyperparameters: $\alpha$ and $\beta$. The hyperparameter $\alpha$ controls the influence of the weighting scheme in the random forest regression. A higher value of $\alpha$ gives more weight to more complete rows, causing the regressor to stick more closely to the observed data, reducing the influence of possible noise from rows with mostly imputed values, but may also reduce the ability of the model to potentially overcome observational bias.
