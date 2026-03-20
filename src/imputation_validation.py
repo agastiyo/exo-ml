@@ -1,6 +1,7 @@
 #%%
 import pandas as pd
 import numpy as np
+import os
 import matplotlib.pyplot as plt
 from sklearn.impute import SimpleImputer
 from sklearn.impute import KNNImputer
@@ -9,15 +10,41 @@ from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 from sklearn.ensemble import RandomForestRegressor
 from src.utils.impute import PseudoGibbsImputer
+from src.utils.impute import EfficientPseudoGibbs
+import src.utils.pca as PCA
 
 #%%
+# Loading all of the data
 df = pd.read_csv('data/cleaned/STELLARHOSTS.csv',comment='#')
 gaia_dir = "data/cleaned/gaia_arrays"
 save_dir = "data/imputation_test"
 feature_cols = ['sy_pnum', 'sy_snum', 'st_teff', 'st_rad', 'st_mass', 'st_met_FeH', 'st_lum', 'st_logg', 'st_age']
 
+# Function to quantify the distance between two matrices
 def RMSE_masked(X_original,X_imputed,mask):
   return np.sqrt(np.mean( (X_original[mask]-X_imputed[mask])**2 ))
+
+# Function to calculate the Marchenko-Pastur bounds
+def marchenko_pastur_bounds(X):
+  """
+  Computes MP bounds for covariance eigenvalues.
+  Assumes X is standardized.
+  """
+  n, p = X.shape
+  q = p / n
+  
+  sigma2 = 1.0  # since we standardize
+  
+  lambda_minus = sigma2 * (1 - np.sqrt(q))**2
+  lambda_plus  = sigma2 * (1 + np.sqrt(q))**2
+  
+  return lambda_minus, lambda_plus
+
+# Function to quantify the distance between two eigenvalue spectra
+def eig_log_l2(true, imp, eps=1e-8):
+  return np.sqrt(np.sum((np.log(true + eps) - np.log(imp + eps))**2))
+
+#%%
 
 # Create matrix X
 X = df[feature_cols].to_numpy()
@@ -48,18 +75,63 @@ X_init = X_init.T
 X_known = X[np.isfinite(X).all(axis=1)]
 print(X_known.shape)
 
-# Artificially mask X_known
+#%%
+# Define the total runs
+n_tot = 1
+# Define the missing proportions you want to test
 props_missing = np.arange(0.1, 1, 0.1)
+# Define the number of runs for stochastic imputation methods
 n_runs = 5
 
-meanDiff, medianDiff, KNNdiff, MICEdiff, MissForestDiff, PGIdiff = ([] for _ in range(6))
+# Dictionary to track imputation performance
+mean_diff_dict = {
+  "Mean": [],
+  "Median": [],
+  "KNN": [],
+  "MICE": [],
+  "MissForest": [],
+  "GSimp-RF+": []
+}
 
-for prop_missing in props_missing:
-  print(prop_missing)
-  mean_runs, median_runs, knn_runs, mice_runs, mf_runs, pgi_runs = ([] for _ in range(6))
+# Dictionary to track eigenvalue spectra
+eigval_dists_dict = {
+  "Mean": [],
+  "Median": [],
+  "KNN": [],
+  "MICE": [],
+  "MissForest": [],
+  "GSimp-RF+": []
+}
+
+# Store the true eigenvalue spectra
+eigvals_true, _ = PCA.RunPCA(X_known)
+plt.plot(eigvals_true)
+
+#%%
+for j in range(n_tot):
+  print(f"Full Iteration {j+1}")
+  diff_dict = {
+    "Mean": [],
+    "Median": [],
+    "KNN": [],
+    "MICE": [],
+    "MissForest": [],
+    "GSimp-RF+": []
+  }
   
-  for _ in range(n_runs):
-    print(_)
+  eigvals_dict = {
+    "Mean": [],
+    "Median": [],
+    "KNN": [],
+    "MICE": [],
+    "MissForest": [],
+    "GSimp-RF+": []
+  }
+  
+  for prop_missing in props_missing:
+    print(prop_missing)
+    
+    # ---- SINGLE MASK PER MISSINGNESS (important for fair comparison) ----
     X_masked = X_known.copy()
     
     n_total = X_known.size
@@ -71,56 +143,95 @@ for prop_missing in props_missing:
     
     mask = np.isnan(X_masked)
 
+    # ------------------ DETERMINISTIC METHODS ------------------
+
     # Mean
     X_mean = SimpleImputer(strategy='mean').fit_transform(X_masked)
-    mean_runs.append(RMSE_masked(X_known, X_mean, mask))
+    diff_dict["Mean"].append(RMSE_masked(X_known, X_mean, mask))
 
     # Median
     X_median = SimpleImputer(strategy='median').fit_transform(X_masked)
-    median_runs.append(RMSE_masked(X_known, X_median, mask))
+    diff_dict["Median"].append(RMSE_masked(X_known, X_median, mask))
 
-    # KNN (scaled)
+    # KNN
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X_masked)
     X_knn = KNNImputer(n_neighbors=5).fit_transform(X_scaled)
     X_knn = scaler.inverse_transform(X_knn)
-    knn_runs.append(RMSE_masked(X_known, X_knn, mask))
+    diff_dict["KNN"].append(RMSE_masked(X_known, X_knn, mask))
 
-    # MICE
-    X_mice = IterativeImputer(max_iter=10, random_state=0, sample_posterior=True).fit_transform(X_masked)
-    mice_runs.append(RMSE_masked(X_known, X_mice, mask))
-
-    # MissForest
+    # MissForest (RF IterativeImputer)
     rf = RandomForestRegressor(n_estimators=50, random_state=0)
-    rf_imputer = IterativeImputer(
-      estimator=rf,
-      max_iter=10,
-      random_state=0
-    )
+    rf_imputer = IterativeImputer(estimator=rf, max_iter=10, random_state=0)
     X_mf = rf_imputer.fit_transform(X_masked)
-    mf_runs.append(RMSE_masked(X_known, X_mf, mask))
+    diff_dict["MissForest"].append(RMSE_masked(X_known, X_mf, mask))
+    
+    # ---- PCA for deterministic methods ----
+    for name, X_imp in [("Mean", X_mean),("Median", X_median),("KNN", X_knn),("MissForest", X_mf)]:
+      eigvals, _ = PCA.RunPCA(X_imp)
+      eigvals_dict[name].append(eig_log_l2(eigvals_true,eigvals))
 
-    # PGI
-    regressor = RandomForestRegressor(n_estimators=50, n_jobs=-1)
-    X_pgi, _ = PseudoGibbsImputer(X_masked, X_init, regressor, save_directory=None, tot_iters=100)
-    pgi_runs.append(RMSE_masked(X_known, X_pgi, mask))
+    # ------------------ STOCHASTIC METHODS ------------------
 
-  meanDiff.append(np.mean(mean_runs))
-  medianDiff.append(np.mean(median_runs))
-  KNNdiff.append(np.mean(knn_runs))
-  MICEdiff.append(np.mean(mice_runs))
-  MissForestDiff.append(np.mean(mf_runs))
-  PGIdiff.append(np.mean(pgi_runs))
+    mice_runs = []
+    pgi_runs = []
+    
+    mice_eigs = []
+    pgi_eigs = []
 
+    for _ in range(n_runs):
+      print("  run:", _+1)
+
+      # MICE
+      X_mice = IterativeImputer(max_iter=10,random_state=None,sample_posterior=True).fit_transform(X_masked)
+
+      mice_runs.append(RMSE_masked(X_known, X_mice, mask))
+
+      # GSimp-RF+
+      regressor = RandomForestRegressor(n_estimators=50, n_jobs=-1)
+      #X_pgi, _ = PseudoGibbsImputer(X_masked, X_init, regressor, save_directory=None, tot_iters=30)
+      X_out = EfficientPseudoGibbs(X_masked,X_init)
+      X_stack = np.stack(X_out, axis=0)
+      X_pgi = np.mean(X_stack, axis=0)
+
+      pgi_runs.append(RMSE_masked(X_known, X_pgi, mask))
+
+      # ---- PCA ----
+
+      eig_mice, _ = PCA.RunPCA(X_mice)
+      eig_pgi, _  = PCA.RunPCA(X_pgi)
+
+      mice_eigs.append(eig_mice)
+      pgi_eigs.append(eig_pgi)
+
+    # average stochastic
+    diff_dict["MICE"].append(np.mean(mice_runs))
+    diff_dict["GSimp-RF+"].append(np.mean(pgi_runs))
+
+    eigvals_dict["MICE"].append( eig_log_l2( eigvals_true, np.mean(mice_eigs, axis=0) ) )
+    eigvals_dict["GSimp-RF+"].append( eig_log_l2( eigvals_true, np.mean(pgi_eigs, axis=0) ) )
+  
+  for name in ["Mean", "Median", "KNN", "MissForest", "MICE", "GSimp-RF+"]:
+    mean_diff_dict[name].append(diff_dict[name])
+    eigval_dists_dict[name].append(eigvals_dict[name])
+  
+for name in mean_diff_dict:
+  mean_diff_dict[name] = np.mean(mean_diff_dict[name], axis=0)
+
+for name in eigval_dists_dict:
+  eigval_dists_dict[name] = np.mean(eigval_dists_dict[name], axis=0)
+
+#%%
+os.makedirs("data/imputation_validation_dicts", exist_ok=True)
+
+np.save(f"data/imputation_validation_dicts/mean_diff.npy", mean_diff_dict)
+np.save(f"data/imputation_validation_dicts/eigval_dists.npy", eigval_dists_dict)
+np.save(f"data/imputation_validation_dicts/props_missing.npy", props_missing)
 #%%
 plt.figure(figsize=(10, 6))
 
-plt.plot(props_missing, meanDiff, marker='o', label='Mean')
-plt.plot(props_missing, medianDiff, marker='o', label='Median')
-plt.plot(props_missing, KNNdiff, marker='o', label='KNN')
-plt.plot(props_missing, MICEdiff, marker='o', label='MICE')
-plt.plot(props_missing, MissForestDiff, marker='o', label='MissForest')
-plt.plot(props_missing, PGIdiff, marker='o', linewidth=3, label='GSimp-RF+')
+for name in ["Mean", "Median", "KNN", "MissForest", "MICE", "GSimp-RF+"]:
+  plt.plot(props_missing, mean_diff_dict[name], marker='o', label=name)
 
 plt.xlabel("Fraction of Missing Data", fontsize=12)
 plt.ylabel("RMSE (on masked entries)", fontsize=12)
@@ -130,4 +241,20 @@ plt.grid(alpha=0.3)
 plt.legend()
 plt.tight_layout()
 plt.show()
+
+# %%
+plt.figure(figsize=(10, 6))
+
+for name in ["Mean", "Median", "KNN", "MissForest", "MICE", "GSimp-RF+"]:
+  plt.plot(props_missing, eigval_dists_dict[name], marker='o', label=name)
+
+plt.xlabel("Fraction of Missing Data", fontsize=12)
+plt.ylabel("Log L2 dist from true Eigval spectra", fontsize=12)
+plt.title("Pattern Destruction vs Missingness", fontsize=14)
+
+plt.grid(alpha=0.3)
+plt.legend()
+plt.tight_layout()
+plt.show()
+  
 # %%
