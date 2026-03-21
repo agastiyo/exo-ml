@@ -77,7 +77,7 @@ print(X_known.shape)
 
 #%%
 # Define the total runs
-n_tot = 1
+n_tot = 10
 # Define the missing proportions you want to test
 props_missing = np.arange(0.1, 1, 0.1)
 # Define the number of runs for stochastic imputation methods
@@ -178,6 +178,14 @@ for j in range(n_tot):
     
     mice_eigs = []
     pgi_eigs = []
+    
+    # GSimp-RF+
+    X_out = EfficientPseudoGibbs(X_masked,X_init)
+    X_stack = np.stack(X_out, axis=0)
+    X_pgi = np.mean(X_stack, axis=0)
+    diff_dict["GSimp-RF+"].append(RMSE_masked(X_known, X_pgi, mask))
+    eig_pgi, _  = PCA.RunPCA(X_pgi)
+    eigvals_dict["GSimp-RF+"].append( eig_log_l2(eigvals_true,eig_pgi) )
 
     for _ in range(n_runs):
       print("  run:", _+1)
@@ -187,29 +195,14 @@ for j in range(n_tot):
 
       mice_runs.append(RMSE_masked(X_known, X_mice, mask))
 
-      # GSimp-RF+
-      regressor = RandomForestRegressor(n_estimators=50, n_jobs=-1)
-      #X_pgi, _ = PseudoGibbsImputer(X_masked, X_init, regressor, save_directory=None, tot_iters=30)
-      X_out = EfficientPseudoGibbs(X_masked,X_init)
-      X_stack = np.stack(X_out, axis=0)
-      X_pgi = np.mean(X_stack, axis=0)
-
-      pgi_runs.append(RMSE_masked(X_known, X_pgi, mask))
-
       # ---- PCA ----
 
       eig_mice, _ = PCA.RunPCA(X_mice)
-      eig_pgi, _  = PCA.RunPCA(X_pgi)
 
       mice_eigs.append(eig_mice)
-      pgi_eigs.append(eig_pgi)
 
-    # average stochastic
     diff_dict["MICE"].append(np.mean(mice_runs))
-    diff_dict["GSimp-RF+"].append(np.mean(pgi_runs))
-
     eigvals_dict["MICE"].append( eig_log_l2( eigvals_true, np.mean(mice_eigs, axis=0) ) )
-    eigvals_dict["GSimp-RF+"].append( eig_log_l2( eigvals_true, np.mean(pgi_eigs, axis=0) ) )
   
   for name in ["Mean", "Median", "KNN", "MissForest", "MICE", "GSimp-RF+"]:
     mean_diff_dict[name].append(diff_dict[name])
@@ -222,11 +215,11 @@ for name in eigval_dists_dict:
   eigval_dists_dict[name] = np.mean(eigval_dists_dict[name], axis=0)
 
 #%%
-os.makedirs("data/imputation_validation_dicts", exist_ok=True)
+os.makedirs("data/efficient_imputation_validation_dicts", exist_ok=True)
 
-np.save(f"data/imputation_validation_dicts/mean_diff.npy", mean_diff_dict)
-np.save(f"data/imputation_validation_dicts/eigval_dists.npy", eigval_dists_dict)
-np.save(f"data/imputation_validation_dicts/props_missing.npy", props_missing)
+np.save(f"data/efficient_imputation_validation_dicts/mean_diff.npy", mean_diff_dict)
+np.save(f"data/efficient_imputation_validation_dicts/eigval_dists.npy", eigval_dists_dict)
+np.save(f"data/efficient_imputation_validation_dicts/props_missing.npy", props_missing)
 #%%
 plt.figure(figsize=(10, 6))
 
