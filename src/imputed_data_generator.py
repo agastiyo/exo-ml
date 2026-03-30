@@ -1,14 +1,11 @@
-#%%
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.ensemble import RandomForestRegressor
-from src.utils.impute import PseudoGibbsImputer
+from datetime import datetime
+from utils.impute import EfficientPseudoGibbs
 
-#%%
 df = pd.read_csv('data/cleaned/STELLARHOSTS.csv',comment='#') # Stellarhost dataframe
 gaia_dir = "data/cleaned/gaia_arrays"
-save_dir = "data/imputed"
+save_dir = "output/imputed_datasets"
 feature_cols = ['sy_pnum', 'sy_snum', 'st_teff', 'st_rad', 'st_mass', 'st_met_FeH', 'st_lum', 'st_logg', 'st_age']
 # This is the order the features will be organized in the data matrix X, so make sure that the initializer matrix has the features in the same order
 
@@ -38,18 +35,7 @@ for i, r in enumerate(rows):
 
 X_init = X_init.T
 
-# Define the regressor to use
-regressor = RandomForestRegressor(n_estimators=50, n_jobs=-1)
+X_chain = EfficientPseudoGibbs(X,X_init)
 
-# Run the imputation algorithm
-X_imputed,rmse_hist = PseudoGibbsImputer(X,X_init,regressor,save_dir,tot_iters=500,burn_in=30,thinning=5)
-
-#%%
-# Plot convergence graph
-print(rmse_hist)
-plt.plot(range(len(rmse_hist)),rmse_hist)
-plt.title("Root Mean Squared Error between iterations")
-# %%
-for item in rmse_hist:
-  print(item)
-# %%
+now = datetime.now()
+np.save(f"{save_dir}/imputed_{now}.npy",X_chain)

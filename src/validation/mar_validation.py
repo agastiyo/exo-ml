@@ -9,7 +9,6 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 from sklearn.ensemble import RandomForestRegressor
-from src.utils.impute import PseudoGibbsImputer
 from src.utils.impute import EfficientPseudoGibbs
 import src.utils.pca as PCA
 
@@ -77,7 +76,7 @@ print(X_known.shape)
 
 #%%
 # Define the total runs
-n_tot = 10
+n_tot = 1
 # Define the missing proportions you want to test
 props_missing = np.arange(0.1, 1, 0.1)
 # Define the number of runs for stochastic imputation methods

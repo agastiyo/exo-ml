@@ -3,6 +3,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.base import clone
 from scipy.stats import truncnorm
 
+# DEPRECIATED, use EfficientPseudoGibbs
 def PseudoGibbsImputer(X, X_initializer, regressor:RandomForestRegressor, save_directory,initializer_bins=100,tot_iters=500,burn_in=20,thinning=10,weight_strength=1.0,stochastic_strength=0.25):
   
   X = X.copy()
@@ -245,4 +246,4 @@ def EfficientPseudoGibbs(X, X_init,n_iters=15,burn_in=10,n_trees=30,max_depth=10
   # Remove the burn in iterations
   output = output[burn_in:]
   
-  return output
+  return np.array(output)
