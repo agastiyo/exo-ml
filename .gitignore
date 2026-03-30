@@ -1,7 +1,7 @@
 tex_files/output
 data/*
 !data/cleaned
-/imgs
+/output
 __pycache__
 .DS_Store
 .vscode
