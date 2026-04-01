@@ -101,21 +101,11 @@ Data with low missingness tends to be able to handle higher values of $\beta$ an
 
 \section{Comparison}
 
-The GSimp-RF+ method is best understood as a hybrid between deterministic Random Forest imputation (MissForest) and stochastic Gibbs-style imputation (GSimp). Compared to existing methods, GSimp-RF+ introduces three main innovations:
-
-\begin{enumerate}
-  \item \textbf{Weighted Learning} - Rows with high imputation uncertainty are downweighted, reducing the propgation of imputation noise or errors across iterations.
-  \item \textbf{Stochastic Conditional Sampling} - Produces a distribution of plausible values instead of point estimates, enabling uncertainty-aware analysis.
-  \item \textbf{Bounded Imputation} - Enforces physically meaningful ranges.
-\end{enumerate}
-
-\autoref{tab:comparison} compares GSimp-RF+ to similar models. Overall, GSimp-RF+ occupies a middle ground between deterministic tree-based imputers such as MissForest and stochastic regression-based methods such as GSimp and MICE. By combining Random Forest conditional modeling with stochastic truncated sampling and row-wise weighting, it provides a flexible framework for imputing nonlinear, bounded, and partially observed scientific data while preserving uncertainty.
-
 \begin{table}
   \centering
   \begin{tabular}{lllll}
     \hline
-    \textbf{Method} & \textbf{Model} & \textbf{Stochastic} & \textbf{Bounded} & \textbf{Weighted} \\
+    \textbf{Method} & \textbf{Model} & \textbf{Stochastic} & \textbf{Weighted} & \textbf{Bounded} \\
     \hline
     GSimp-RF+ & RF & Yes & Yes & Two-sided \\
     MissForest & RF & No & No & No \\
@@ -125,16 +115,15 @@ The GSimp-RF+ method is best understood as a hybrid between deterministic Random
   \label{tab:comparison}
 \end{table}
 
-\section{Issues}
+The GSimp-RF+ method is best understood as a hybrid between deterministic Random Forest imputation (MissForest) and stochastic Gibbs-style imputation (GSimp). Compared to existing methods, GSimp-RF+ introduces three main innovations:
 
-\textbf{This section is just notes right now. Write this better later.}
-
-The most glaring issue facing the algorithm is its computational cost. In its present state, for a data matrix with $P$ features, GSIMP-RF+ trains a random forest from scratch $P$ times per iteration.
-
-Possible solutions:
 \begin{enumerate}
-  \item Train a random forest once every $k$ iterations. The algorithm will then have one random forest step and $k$ stochastic steps per iteration. If every single stochastic step is saved and the random forests are retrained every $5$ steps, then the whole algorithm will run about 5x faster and will need only 50-100 iterations. The effect on performance needs to be measured, however.
+  \item \textbf{Weighted Learning} - Rows with high imputation uncertainty are downweighted, reducing the propgation of imputation noise or errors across iterations.
+  \item \textbf{Stochastic Conditional Sampling} - Produces a distribution of plausible values instead of point estimates, enabling uncertainty-aware analysis.
+  \item \textbf{Bounded Imputation} - Enforces physically meaningful ranges.
 \end{enumerate}
+
+\autoref{tab:comparison} compares GSimp-RF+ to similar models. Overall, GSimp-RF+ occupies a middle ground between deterministic tree-based imputers such as MissForest and stochastic regression-based methods such as GSimp and MICE. By combining Random Forest conditional modeling with stochastic truncated sampling and row-wise weighting, it provides a flexible framework for imputing nonlinear, bounded, and partially observed scientific data while preserving uncertainty.
 
 
 \bibliography{references}
