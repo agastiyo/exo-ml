@@ -1,15 +1,15 @@
 \documentclass[preprint]{aastex631}
 
 \begin{document}
-\title{GSimp-RF+: A Weighted Stochastic Random Forest Imputation Method}
+\title{SWRF-Impute: A Stochastic Weighted Random Forest Imputation Method}
 \author{Agastya Gaur}
 \noaffiliation
 
 \section{Introduction}
 
-The GSimp-RF+ method is an extension of GSimp \citep{weiGSimpGibbsSampler2018} based on the MissForest imputation method \citep{stekhovenMissForestnonparametricMissingValue2012}. GSimp-RF+ incorporates a weighted stochastic random forest approach to impute missing values in datasets. The method iteratively builds random forests to predict missing values, while also incorporating a weighting scheme to improve the accuracy of the imputation. This approach allows for better handling of complex relationships between variables and can lead to more accurate imputations compared to traditional methods.
+SWRF-Impute is an extension of GSimp \citep{weiGSimpGibbsSampler2018} based on the MissForest imputation method \citep{stekhovenMissForestnonparametricMissingValue2012}. SWRF-Impute incorporates a weighted stochastic random forest approach to impute missing values in datasets. The method iteratively builds random forests to predict missing values, while also incorporating a weighting scheme to improve the accuracy of the imputation. This approach allows for better handling of complex relationships between variables and can lead to more accurate imputations compared to traditional methods.
 
-GSimp-RF+ is particularly useful in scenarios where the data has a high degreee of missingness and when variables are non-linearly related. By leveraging the strengths of random forests and incorporating a weighting mechanism, GSimp-RF+ can provide more robust and reliable imputations, ultimately improving the quality of the data for subsequent analyses.
+SWRF-Impute is particularly useful in scenarios where the data has a high degreee of missingness and when variables are non-linearly related. By leveraging the strengths of random forests and incorporating a weighting mechanism, SWRF-Impute can provide more robust and reliable imputations, ultimately improving the quality of the data for subsequent analyses.
 
 \section{Methodology}
 
@@ -33,10 +33,10 @@ Each feature $p$ in $\mathbf{X}$ is assumed to have a an empirical distribution 
 Missing values in $\mathbf{X}$ are the initialized with a random draw from the corresponding feature's initializer column in $\mathbf{X}^{init}$. This results in a full matrix $\mathbf{X^{(0)}}$, though the indices of the imputed values $mp$ are still tracked for each feature.
 
 \subsection{Iteration}
-The initialized matrix $\mathbf{X^{(0)}}$ is the first matrix in a series of a set number $T$ of iterations. Each iteration $t$, the GSimp-RF+ method imputes the missing values for each feature $p$ in the dataset using a Random Forest Regression step and $k$ Stochastic Draw steps. One iteration of the method consists of performing these steps for each feature in the dataset. The steps are described below.
+The initialized matrix $\mathbf{X^{(0)}}$ is the first matrix in a series of a set number $T$ of iterations. Each iteration $t$, SWRF-Impute imputes the missing values for each feature $p$ in the dataset using a Random Forest Regression step and $k$ Stochastic Draw steps. One iteration of the method consists of performing these steps for each feature in the dataset. The steps are described below.
 
 \subsection{Random Forest Regression}
-Similar to MissForest \citep{stekhovenMissForestnonparametricMissingValue2012}, a random forest regression model can be trained to predict $\mathbf{x}^{(t+1)}_{mp,p}$ given the initialized matrix. The model is trained on the observed values $\mathbf{x}_{op,p}$ as the target variable and the corresponding rows of the other features $\mathbf{X}^{(t)}_{op,-p}$ as the predictor variables. The biggest divergence between MissForest and GSimp-RF+ is that the latter incorporates a weighting scheme to improve the accuracy of the imputation. Each row of the predictor variables $\mathbf{X}^{(t)}_{op,-p}$ is assigned a weight based on the proportion of missing values in the row. Explicitly, the weight for row $i$ is calculated as
+Similar to MissForest \citep{stekhovenMissForestnonparametricMissingValue2012}, a random forest regression model can be trained to predict $\mathbf{x}^{(t+1)}_{mp,p}$ given the initialized matrix. The model is trained on the observed values $\mathbf{x}_{op,p}$ as the target variable and the corresponding rows of the other features $\mathbf{X}^{(t)}_{op,-p}$ as the predictor variables. The biggest divergence between MissForest and SWRF-Impute is that the latter incorporates a weighting scheme to improve the accuracy of the imputation. Each row of the predictor variables $\mathbf{X}^{(t)}_{op,-p}$ is assigned a weight based on the proportion of missing values in the row. Explicitly, the weight for row $i$ is calculated as
 \begin{equation}
   w_i = \left(\frac{\sum_{j \neq p} \mathbf{1}_{\{\mathbf{X}_{i,j} \text{ observed}\}}}{P-1}\right)^\alpha
 \end{equation}
@@ -57,7 +57,7 @@ In the original GSimp method \citep{weiGSimpGibbsSampler2018}, the variance betw
 \begin{equation}
   \left(\sigma^{(t,k)}_p\right)^2 = \frac{1}{|mp|} \sum_{mp} (\mathbf{x}^{pred,(t,k)}_{mp,p} - \mathbf{x}^{(t,k)}_{mp,p})^2
 \end{equation}
-This variance is then used to draw new imputed values from a truncated normal distribution. GSimp was originally designed for left-censored missing values, so the truncation point is set to the minimum observed value of feature $p$. However, in GSimp-RF+, the both a lower and upper truncation point is set. The lower bound is defined as the minimum between the minimum observed value of feature $p$ and the minimum initializer value for feature $p$. Similarly, the upper bound is defined as the maximum between the maximum observed value of feature $p$ and the maximum initializer value for feature $p$. Formally,
+This variance is then used to draw new imputed values from a truncated normal distribution. GSimp was originally designed for left-censored missing values, so the truncation point is set to the minimum observed value of feature $p$. However, in SWRF-Impute, the both a lower and upper truncation point is set. The lower bound is defined as the minimum between the minimum observed value of feature $p$ and the minimum initializer value for feature $p$. Similarly, the upper bound is defined as the maximum between the maximum observed value of feature $p$ and the maximum initializer value for feature $p$. Formally,
 \begin{equation}
   \text{lo}_p = \min(\min(\mathbf{X}_{op,p}), \min(\mathbf{X}^{init}_p))
 \end{equation}
@@ -79,19 +79,19 @@ Finally, after $K$ draws are completed, the full iteration including the Random 
   \mathbf{X}^{(t+1)} = \mathbf{X}^{(t,K)}
 \end{equation}
 
-One iteration of the GSimp-RF+ method consists of performing the random forest regression and $K$ stochastic steps for each feature in the dataset. The process is repeated until a set number of iteration is reached. The sequence $\{\mathbf{X}^{(t)}\}$ then forms a Markov chain over the space of completed datasets.
+One iteration of SWRF-Impute consists of performing the random forest regression and $K$ stochastic steps for each feature in the dataset. The process is repeated until a set number of iteration is reached. The sequence $\{\mathbf{X}^{(t)}\}$ then forms a Markov chain over the space of completed datasets.
 
-Snapshots of the data matrix are taken after every stochastic step to create a Markov chain of possible datasets. The final imputed dataset can be obtained by averaging the imputed values the sequence, and probability distributions can be obtained for each missing value as well. In this way, GSimp-RF+ not only calculates an imputed dataset, but also quantifies uncertainty for each missing value.
+Snapshots of the data matrix are taken after every stochastic step to create a Markov chain of possible datasets. The final imputed dataset can be obtained by averaging the imputed values the sequence, and probability distributions can be obtained for each missing value as well. In this way, SWRF-Impute not only calculates an imputed dataset, but also quantifies uncertainty for each missing value.
 
 \subsection{Hyperparameters}
-The GSimp-RF+ method has two main hyperparameters: $\alpha$ and $\beta$. The hyperparameter $\alpha$ controls the influence of the weighting scheme in the random forest regression. A higher value of $\alpha$ gives more weight to more complete rows, causing the regressor to stick more closely to the observed data, reducing the influence of possible noise from rows with mostly imputed values, but may also reduce the ability of the model to potentially overcome observational bias.
+SWRF-Impute has two main hyperparameters: $\alpha$ and $\beta$. The hyperparameter $\alpha$ controls the influence of the weighting scheme in the random forest regression. A higher value of $\alpha$ gives more weight to more complete rows, causing the regressor to stick more closely to the observed data, reducing the influence of possible noise from rows with mostly imputed values, but may also reduce the ability of the model to potentially overcome observational bias.
 
 The hyperparameter $\beta$ controls the strength of the stochastic step. A higher value of $\beta$ results in more variance in the new imputed values, which can help to escape local minima but may also introduce more noise, hindering convergence and potentially leading to worse imputation performance.
 
-The initializer matrix $\mathbf{X}^{init}$ can also be considered a hyperparameter, as the choice of prior distribution and the number of draws can influence the imputation results. Using a more informative prior distribution can lead to better initial imputations, which may improve the overall performance of the GSimp-RF+ method. If the prior distribution ovecomes any observational bias in the original data, it may allow GSimp-RF+ to overcome observational bias as well. However, if the prior distribution is not well-chosen, it may introduce additional bias into the imputation process.
+The initializer matrix $\mathbf{X}^{init}$ can also be considered a hyperparameter, as the choice of prior distribution and the number of draws can influence the imputation results. Using a more informative prior distribution can lead to better initial imputations, which may improve the overall performance of SWRF-Impute. If the prior distribution ovecomes any observational bias in the original data, it may allow SWRF-Impute to overcome observational bias as well. However, if the prior distribution is not well-chosen, it may introduce additional bias into the imputation process.
 
 \subsection{Convergence}
-Convergence of the GSimp-RF+ method can be assessed by monitoring the change in imputed values across iterations. The approach employed by the algorithm is to calculate the root mean squared difference between the imputed values of the current iteration and the previous iteration. Due to the stochastic updates, convergence should be interpreted as the chain reaching a stationary distribution rather than a fixed point.
+Convergence of SWRF-Impute can be assessed by monitoring the change in imputed values across iterations. The approach employed by the algorithm is to calculate the root mean squared difference between the imputed values of the current iteration and the previous iteration. Due to the stochastic updates, convergence should be interpreted as the chain reaching a stationary distribution rather than a fixed point.
 
 The algorithm does not have a formal convergence criterion, and the number of iterations can be set as a hyperparameter. This is due to the stochastic nature of the method, which may cause the imputed values to fluctuate across iterations. However, if the root mean squared difference between iterations falls below a certain threshold, it can be an indication that the imputed values have stabilized and that the algorithm has converged.
 
@@ -107,15 +107,15 @@ Data with low missingness tends to be able to handle higher values of $\beta$ an
     \hline
     \textbf{Method} & \textbf{Model} & \textbf{Stochastic} & \textbf{Weighted} & \textbf{Bounded} \\
     \hline
-    GSimp-RF+ & RF & Yes & Yes & Two-sided \\
+    SWRF-Impute & RF & Yes & Yes & Two-sided \\
     MissForest & RF & No & No & No \\
     GSimp & Linear & Yes & No & Left-trunc \\
   \end{tabular}
-  \caption{A comaprison of GSimp-RF+ to similar imputation methods}
+  \caption{A comaprison of SWRF-Impute to similar imputation methods}
   \label{tab:comparison}
 \end{table}
 
-The GSimp-RF+ method is best understood as a hybrid between deterministic Random Forest imputation (MissForest) and stochastic Gibbs-style imputation (GSimp). Compared to existing methods, GSimp-RF+ introduces three main innovations:
+SWRF-Impute is best understood as a hybrid between deterministic Random Forest imputation (MissForest) and stochastic Gibbs-style imputation (GSimp). Compared to existing methods, SWRF-Impute introduces three main innovations:
 
 \begin{enumerate}
   \item \textbf{Weighted Learning} - Rows with high imputation uncertainty are downweighted, reducing the propgation of imputation noise or errors across iterations.
@@ -123,7 +123,7 @@ The GSimp-RF+ method is best understood as a hybrid between deterministic Random
   \item \textbf{Bounded Imputation} - Enforces physically meaningful ranges.
 \end{enumerate}
 
-\autoref{tab:comparison} compares GSimp-RF+ to similar models. Overall, GSimp-RF+ occupies a middle ground between deterministic tree-based imputers such as MissForest and stochastic regression-based methods such as GSimp and MICE. By combining Random Forest conditional modeling with stochastic truncated sampling and row-wise weighting, it provides a flexible framework for imputing nonlinear, bounded, and partially observed scientific data while preserving uncertainty.
+\autoref{tab:comparison} compares SWRF-Impute to similar models. Overall, SWRF-Impute occupies a middle ground between deterministic tree-based imputers such as MissForest and stochastic regression-based methods such as GSimp and MICE. By combining Random Forest conditional modeling with stochastic truncated sampling and row-wise weighting, it provides a flexible framework for imputing nonlinear, bounded, and partially observed scientific data while preserving uncertainty.
 
 
 \bibliography{references}
