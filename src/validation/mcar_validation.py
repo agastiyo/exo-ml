@@ -35,63 +35,18 @@ def RMSE_masked(X_original,X_imputed,mask):
 def eig_log_l2(true, imp, eps=1e-8):
   return np.sqrt(np.sum((np.log(true + eps) - np.log(imp + eps))**2))
 
-# MAR mask a dataset using trigger-based row masking
-# Trigger feature is randomly chosen, rows with extreme trigger values get masked
-def MAR_mask(X_known, prop_missing):
-  N, P = X_known.shape
-  
-  # Calculate total cells to mask
-  n_cells_mask = int(np.floor(prop_missing * N * P))
-  
-  # Randomly select a trigger feature
-  trigger_idx = np.random.randint(0, P)
-  
-  # Get trigger feature and compute z-scores
-  trigger_feature = X_known[:, trigger_idx]
-  mu = np.nanmean(trigger_feature)
-  sigma = np.nanstd(trigger_feature)
-  z_scores = (trigger_feature - mu) / (sigma + 1e-10)  # Add small epsilon to avoid division by zero
-  
-  # Rank observations by absolute z-score (extremity)
-  abs_z = np.abs(z_scores)
-  extremity_order = np.argsort(-abs_z)  # Descending order (most extreme first)
-  
-  # Create mask (False = observed, True = missing)
-  mask = np.zeros((N, P), dtype=bool)
-  
-  # Number of rows to mask (rows with most extreme trigger values)
-  n_rows_to_mask = int(np.ceil(prop_missing * P))
-  
-  # Mask all features except trigger in top extreme rows
-  masked_count = 0
-  for i in range(n_rows_to_mask):
-    row_idx = extremity_order[i]
-    for col_idx in range(P):
-      if col_idx != trigger_idx:  # Never mask the trigger feature
-        mask[row_idx, col_idx] = True
-        masked_count += 1
-  
-  # If we haven't masked enough cells yet, randomly mask remaining unmasked cells
-  if masked_count < n_cells_mask:
-    remaining_cells = n_cells_mask - masked_count
-    
-    # Find all currently unmasked cells
-    unmasked_positions = np.where(~mask)
-    unmasked_count = len(unmasked_positions[0])
-    
-    if unmasked_count > 0:
-      # Randomly select cells to mask from unmasked ones
-      n_to_mask_random = min(remaining_cells, unmasked_count)
-      random_indices = np.random.choice(unmasked_count, size=n_to_mask_random, replace=False)
-      
-      for idx in random_indices:
-        row = unmasked_positions[0][idx]
-        col = unmasked_positions[1][idx]
-        mask[row, col] = True
-  
-  # Create masked data (NaN for missing values)
+# MCAR mask a dataset with a given missing proportion
+def MCAR_mask(X_known, prop_missing):
   X_masked = X_known.copy()
-  X_masked[mask] = np.nan
+    
+  n_total = X_known.size
+  n_missing = int(prop_missing * n_total)
+  
+  flat_idx = np.random.choice(n_total, n_missing, replace=False)
+  row_idx, col_idx = np.unravel_index(flat_idx, X_known.shape)
+  X_masked[row_idx, col_idx] = np.nan
+  
+  mask = np.isnan(X_masked)
   
   return X_masked, mask
 
@@ -152,7 +107,7 @@ for j in range(n_tot):
     print(prop_missing)
     
     # Create the mask for this missingness level
-    X_masked, mask = MAR_mask(X_known, prop_missing)
+    X_masked, mask = MCAR_mask(X_known, prop_missing)
     
     # --------------------------------------------
 
@@ -211,13 +166,13 @@ for j in range(n_tot):
     mean_diff_dict[name].append(diff_dict[name])
     eigval_dists_dict[name].append(eigvals_dict[name])
 
-save_dir = "output/mar_validation_runs"
+save_dir = "output/mcar_validation_runs"
 os.makedirs(save_dir, exist_ok=True)
 
 np.save(f"{save_dir}/mean_diff.npy", mean_diff_dict)
 np.save(f"{save_dir}/eigval_dists.npy", eigval_dists_dict)
 np.save(f"{save_dir}/props_missing.npy", props_missing)
-
+#%%
 plt.figure(figsize=(10, 6))
 
 for name in ["Mean", "Median", "KNN", "MissForest", "MICE", "SWRF-Impute"]:
@@ -227,13 +182,14 @@ for name in ["Mean", "Median", "KNN", "MissForest", "MICE", "SWRF-Impute"]:
 
 plt.xlabel("Fraction of Missing Data", fontsize=12)
 plt.ylabel("RMSE (on masked entries)", fontsize=12)
-plt.title("MAR Imputation Performance", fontsize=14)
+plt.title("MCAR Imputation Performance", fontsize=14)
 
 plt.grid(alpha=0.3)
 plt.legend()
 plt.tight_layout()
 plt.savefig(f"{save_dir}/performance.png")
 
+# %%
 plt.figure(figsize=(10, 6))
 
 for name in ["Mean", "Median", "KNN", "MissForest", "MICE", "SWRF-Impute"]:
@@ -243,12 +199,11 @@ for name in ["Mean", "Median", "KNN", "MissForest", "MICE", "SWRF-Impute"]:
 
 plt.xlabel("Fraction of Missing Data", fontsize=12)
 plt.ylabel("Log L2 dist from true Eigval spectra", fontsize=12)
-plt.title("MAR Pattern Destruction", fontsize=14)
+plt.title("MCAR Pattern Destruction", fontsize=14)
 
 plt.grid(alpha=0.3)
 plt.legend()
 plt.tight_layout()
 plt.savefig(f"{save_dir}/pattern.png")
-
-
+  
 # %%

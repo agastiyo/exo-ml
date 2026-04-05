@@ -19,8 +19,8 @@ for col in features:
 # Create the dictionary that stores the corresponding initial distributions
 gaia_dir = "data/cleaned/gaia_arrays"
 initDict = {
-  'sy_pnum'    : np.ones(1), # Complete row, so this initializer doesn't matter
-  'sy_snum'    : np.ones(1), # Complete row, so this initializer doesn't matter
+  'sy_pnum'    : df['sy_pnum'].to_numpy(), # Sample from itself
+  'sy_snum'    : df['sy_snum'].to_numpy(), # Sample from itself
   'st_teff'    : np.load(f"{gaia_dir}/teff.npy"),
   'st_rad'     : np.load(f"{gaia_dir}/radius.npy"),
   'st_mass'    : np.load(f"{gaia_dir}/mass.npy"),

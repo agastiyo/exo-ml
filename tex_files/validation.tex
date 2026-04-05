@@ -1,0 +1,267 @@
+\documentclass[preprint]{aastex631}
+
+\begin{document}
+
+\title{Validation of SWRF-Impute: MCAR, MAR, and MNAR Testing}
+\author{Agastya Gaur}
+\noaffiliation
+
+\section{Introduction}
+
+Validation of an imputation algorithm is essential to assess its ability to reconstruct missing values accurately while preserving statistical properties of the dataset. The reliability of imputation depends critically on the missing data mechanism. This document presents validation methodology and completed results for the SWRF-Impute imputation algorithm under three distinct missing data mechanisms: Missing Completely At Random (MCAR), Missing At Random (MAR), and Missing Not At Random (MNAR).
+
+\section{Data and Features}
+
+The validation studies employ exoplanet host star data from the NASA Exoplanet Archive stored in \texttt{data/cleaned/STELLARHOSTS.csv}. The available features in the full dataset are listed in \autoref{tab:data_parameters}.
+
+\begin{table}
+  \centering
+  \begin{tabular}{ll}
+    \hline
+    \textbf{Parameter} & \textbf{Description} \\
+    \hline
+    \verb|sy_name| & System Name \\
+    \verb|hostname| & Host Name \\
+    \verb|sy_snum| & Number of Stars \\
+    \verb|sy_pnum| & Number of Planets \\
+    \verb|st_refname| & Stellar Parameter Reference \\
+    \verb|st_spectype| & Spectral Type \\
+    \verb|st_teff| & Stellar Effective Temperature [K] \\
+    \verb|st_rad| & Stellar Radius [Solar Radius] \\
+    \verb|st_mass| & Stellar Mass [Solar mass] \\
+    \verb|st_met| & Stellar Metallicity [dex] \\
+    \verb|st_metratio| & Stellar Metallicity Ratio \\
+    \verb|st_lum| & Stellar Luminosity [log(Solar)] \\
+    \verb|st_logg| & Stellar Surface Gravity [log10(cm/s$^2$)] \\
+    \verb|st_age| & Stellar Age [Gyr] \\
+    \verb|st_dens| & Stellar Density [g/cm$^3$] \\
+    \verb|st_vsin| & Stellar Rotational Velocity [km/s] \\
+    \verb|st_rotp| & Stellar Rotational Period [days] \\
+    \verb|st_radv| & Systemic Radial Velocity [km/s] \\
+    \hline
+  \end{tabular}
+  \caption{Data parameters collected from the NASA Exoplanet Archive STELLARHOSTS Table. More information can be found at \url{https://exoplanetarchive.ipac.caltech.edu/docs/API_STELLARHOSTS_columns.html}.}
+  \label{tab:data_parameters}
+\end{table}
+
+\subsection{Dynamic Feature Selection}
+
+Rather than using a fixed set of features, the analysis uses a dynamic selection mechanism. Dynamic feature selection is controlled via a completeness threshold parameter $\tau$, which determines the maximum allowable missing fraction for a feature to be included in the analysis. The data matrix $\mathbf{X} \in \mathbb{R}^{N \times P}$ is constructed by selecting only features $p$ where the fraction of missing values satisfies:
+
+\begin{equation}
+  \text{missing\_fraction}(p) \leq \tau
+\end{equation}
+
+This flexible approach allows validation studies to be conducted at different completeness levels by adjusting $\tau$, enabling investigation of algorithm robustness across varying data quality scenarios.
+
+For this paper, we employ $\tau = 0.7$ (70\% completeness threshold), which yields $P=9$ features and $N=583$ complete-case samples where all selected features are fully observed.
+
+\subsection{Initializer Matrix}
+
+The complete-case dataset is supplemented with an initializer matrix $\mathbf{X}^{init} \in \mathbb{R}^{M \times P}$ containing draws from empirical prior distributions. For each selected feature, the prior distribution is obtained from:
+
+\begin{enumerate}
+  \item \textbf{Gaia-sourced features}: Empirical distributions from Gaia DR3 astrometric measurements
+  \item \textbf{Archive-only features}: Empirical distributions from observed values in the full STELLARHOSTS dataset
+\end{enumerate}
+
+This dual-source initialization strategy provides informative priors based on external calibrations (Gaia) where available, while leveraging STELLARHOST statistics otherwise. The initializer provides empirical distributions for the SWRF-Impute algorithm's initialization step.
+
+\section{Evaluation Metrics}
+
+Two metrics assess imputation quality:
+
+\subsection{Imputation Accuracy: RMSE on Masked Entries}
+
+The primary metric quantifies the pointwise accuracy of imputed values. Given the original complete data $\mathbf{X}_{orig}$, imputed data $\mathbf{X}_{imp}$, and binary mask $\mathbf{M}$ indicating missing locations, we compute:
+
+\begin{equation}
+  \text{RMSE}_{\text{masked}} = \sqrt{\frac{1}{\sum_{i,j} \mathbf{M}_{i,j}} \sum_{i,j} \mathbf{M}_{i,j} (\mathbf{X}_{orig,i,j} - \mathbf{X}_{imp,i,j})^2}
+\end{equation}
+
+This metric measures how close imputed values are to the ground truth on missing entries only, capturing the algorithm's pointwise predictive accuracy. Lower values indicate better imputation quality.
+
+\subsection{Pattern Preservation: Eigenvalue Spectrum Distance}
+
+The second metric assesses whether imputation preserves the statistical structure and correlations in the data. After mean-centering and standardizing both the original and imputed data, Principal Component Analysis (PCA) is performed to obtain eigenvalue spectra $\mathbf{\lambda}_{true}$ and $\mathbf{\lambda}_{imp}$ representing the variance structure.
+
+We quantify the distance between spectra using logarithmic $L^2$ distance:
+
+\begin{equation}
+  d_{\text{eig}} = \sqrt{\sum_{k=1}^{P} (\log(\lambda_{true,k} + \epsilon) - \log(\lambda_{imp,k} + \epsilon))^2}
+\end{equation}
+
+where $\epsilon = 10^{-8}$ provides numerical stability. This log-scale distance is appropriate for eigenvalues spanning multiple orders of magnitude and emphasizes relative differences. Lower values indicate that the imputation preserves the correlational structure of the data, which is critical for downstream analysis.
+
+\section{Validation Methodology}
+
+Across all three missing data mechanisms (MCAR, MAR, and MNAR), the validation pipeline is identical except for mask generation.
+
+\subsection{Initialization}
+
+All tests begin with the same setup. Starting from the set of complete-case samples $\mathbf{X}_{known} \in \mathbb{R}^{N \times P}$ with $\tau=0.7$, we systematically introduce missingness:
+
+\begin{equation}
+  n_{\text{missing}} = \lfloor \text{prop\_missing} \times (N \times P) \rfloor
+\end{equation}
+
+where $\text{prop\_missing}$ ranges from $0.1$ (10\%) to $0.9$ (90\%) in increments of $0.1$. The missingness is applied via mechanism-specific mask generation (see \S\ref{sec:mask-generation} for details on MCAR, MAR, and MNAR mask creation).
+
+\subsection{Imputation Algorithm Comparison}
+
+The following six algorithms are evaluated identically for all three mechanisms:
+
+\begin{enumerate}
+  \item \textbf{Mean Imputation} - Replaces missing values with the mean of observed values in each feature.
+  \item \textbf{Median Imputation} - Replaces missing values with the median of observed values in each feature.
+  \item \textbf{$k$-Nearest Neighbors (KNN)} - Imputes using the average of the 5 nearest complete neighbors in standardized feature space.
+  \item \textbf{MICE} - Multivariate Imputation by Chained Equations with maximum 10 iterations and posterior sampling to introduce stochasticity.
+  \item \textbf{MissForest} - Iterative imputation using Random Forest regressors (30 trees, 10 iterations), unweighted.
+  \item \textbf{SWRF-Impute} - The proposed method: weighted stochastic imputation via random forests (30 trees, 10 iterations) with truncated normal sampling.
+\end{enumerate}
+
+\subsection{Stochastic Method Handling}
+
+For stochastic methods (MICE and SWRF-Impute), a multiple run protocol is employed to account for stochasticity:
+
+\begin{enumerate}
+  \item MICE is executed $n_{\text{runs}} = 35$ times per missingness level. Each run uses a different random seed. The results are averaged to produce a point dataset estimate.
+  \item For SWRF-Impute: With default settings, a Markov chain of length 35 is produced. The generated chain is averaged to produce a point dataset estimate.
+\end{enumerate}
+
+\subsection{Result Aggregation}
+
+A single full test consists of:
+\begin{itemize}
+  \item Evaluation at 9 missingness levels: $\{0.1, 0.2, \ldots, 0.9\}$
+  \item 6 imputation algorithms
+\end{itemize}
+
+The test can be repeated across multiple iterations ($n_{\text{tot}}$ trials) to assess stability. Final performance metrics are averaged across all iterations, producing two result dictionaries indexed by mechanism and missingness level.
+
+\begin{equation}
+  \text{RMSE}_{\text{results}} = \{\text{algorithm} : [\text{RMSE}_{0.1}, \ldots, \text{RMSE}_{0.9}]\}
+\end{equation}
+
+\begin{equation}
+  \text{Eigval}_{\text{results}} = \{\text{algorithm} : [d_{\text{eig},0.1}, \ldots, d_{\text{eig},0.9}]\}
+\end{equation}
+
+\section{Mask Generation Methods}
+\label{sec:mask-generation}
+
+The primary difference across MCAR, MAR, and MNAR testing is the mask generation strategy. All other pipeline components (initialization, imputation, aggregation) are identical.
+
+\subsection{MCAR}
+
+In MCAR data, missing data is completely random. To simulate this for each missingness level, a single random mask is generated for each full test. The mask is created by:
+
+\begin{enumerate}
+  \item Flattening the complete data matrix to a vector of length $N \times P$
+  \item Randomly sampling $n_{\text{missing}}$ indices without replacement
+  \item Converting indices back to (row, column) pairs via $\text{unravel\_index}()$
+  \item Setting masked entries to NaN to create $\mathbf{X}_{\text{masked}}^{\text{MCAR}}$
+\end{enumerate}
+
+\subsection{MAR}
+
+In MAR data, the probability that a value is missing depends on observed variables. We generate MAR missingness by selecting a random feature as a trigger variable and masking features across rows conditioned on extreme values in that trigger. This creates realistic patterns where missingness depends on observable, but extreme, values. This method is loosely based on the MAR generation method used by \citet{toyeBenchmarkingMissingData2025}.
+
+\begin{enumerate}
+  \item \textbf{Select trigger feature}: Randomly choose one feature $f_{\text{trigger}}$ from the $P$ available features
+  \item \textbf{Standardize trigger feature}: Compute z-scores for all observations in the trigger feature: $z_i = \frac{f_{\text{trigger},i} - \mu}{\sigma}$ for $i = 1, \ldots, N$
+  \item \textbf{Rank by extremity}: Sort observations by the absolute value of z-score $|z_i|$ in descending order (most extreme values first)
+  \item \textbf{Mask row features}: For the top $\lceil \text{prop\_missing} \times P \rceil$ observations (ranked by extremity), mask all features except the trigger feature $f_{\text{trigger}}$. This ensures observations with extreme trigger values lose information across multiple features but retain the trigger itself.
+  \item \textbf{Fill remaining mask}: If the total number of masked cells is less than $n_{\text{missing}}$, randomly select from remaining unmasked cells until the target proportion is reached
+\end{enumerate}
+
+This mechanism creates MAR patterns where missingness is ignorable given the observed trigger feature. Observations with extreme trigger values (high $|z|$) experience widespread missingness in other features, but the trigger feature remains fully observed.
+
+\subsection{MNAR}
+
+In MNAR data, the probability that a value is missing depends on the unobserved value itself or on hidden confounders. To generate this, we employ a version of the Missing Based on Unobserved Variables (MBUV) strategy introduced by \citet{pereiraImputationDataMissing2024}.
+
+Our version of the algorithm operates as follows:
+
+\begin{enumerate}
+  \item \textbf{Generate unobserved feature}: Generate a standardized unobserved feature $f_{\text{unobserved}}$ following a normal distribution.
+  \item \textbf{Rank by extremity}: Sort observations of $f_{\text{unobserved}}$ by the absolute value of z-score $|z_i|$ in descending order (most extreme values first)
+  \item \textbf{Mask row features}: For the top $\lceil \text{prop\_missing} \times P \rceil$ observations (ranked by extremity), mask all but one randomly selected feature.
+  \item \textbf{Fill remaining mask}: If the total number of masked cells is less than $n_{\text{missing}}$, randomly select from remaining unmasked cells until the target proportion is reached
+\end{enumerate}
+
+\section{Results}
+
+Validation testing was conducted across all three missing data mechanisms with missing proportions ranging from 10\% to 90\%. Each mechanism was tested over 10 independent runs to assess imputation accuracy and pattern preservation.
+
+\subsection{MCAR Results}
+
+\begin{figure}[h]
+\includegraphics[width=0.85\textwidth]{../output/mcar_validation_runs/performance.png}
+\centering
+\caption{MCAR mechanism: RMSE performance on masked entries across six imputation methods. SWRF-Impute and MissForest achieve comparable, near-optimal performance and graceful degradation. Simple methods (Mean, Median) show constant high error, while MICE exhibits high variance and instability.}
+\label{fig:mcar_performance}
+\end{figure}
+
+\begin{figure}[h]
+\includegraphics[width=0.85\textwidth]{../output/mcar_validation_runs/pattern.png}
+\centering
+\caption{MCAR mechanism: Log $L^2$ distance from true eigenvalue spectrum. SWRF-Impute and MissForest both preserve eigenvalue structure significantly better than competing methods. KNN shows moderate preservation, while naive imputation methods (Mean/Median) and MICE fail to preserve spectrum.}
+\label{fig:mcar_pattern}
+\end{figure}
+
+Under MCAR, both SWRF-Impute and MissForest demonstrate superior performance. SWRF-Impute achieves mean RMSE of $159.36 \pm 91.36$ compared to MissForest's $161.03 \pm 96.43$, indicating statistically comparable accuracy. Critically, SWRF-Impute and MissForest preserve the eigenvalue spectrum significantly better than all baselines, suggesting they recover not just point estimates but also the underlying covariance structure and dimensionality of the data.
+
+The random forest methods scale gracefully: performance degrades roughly linearly with increased missingness. In contrast, MICE exhibits high variance and inferior point-estimate accuracy, though remains surprisingly stable across missing proportions. Simple imputation methods plateau at constant error, providing a sanity-check baseline.
+
+\subsection{MAR Results}
+
+\begin{figure}[h]
+\includegraphics[width=0.85\textwidth]{../output/mar_validation_runs/performance.png}
+\centering
+\caption{MAR mechanism: RMSE performance on masked entries. Under MAR, MissForest and SWRF-Impute achieve comparable performance. Both methods maintain the linear degradation pattern observed in MCAR. MAR missingness creates slightly higher baseline error than uniform MCAR, but random forest methods remain robust.}
+\label{fig:mar_performance}
+\end{figure}
+
+\begin{figure}[h]
+\includegraphics[width=0.85\textwidth]{../output/mar_validation_runs/pattern.png}
+\centering
+\caption{MAR mechanism: Log $L^2$ distance from true eigenvalue spectrum. SWRF-Impute and MissForest continue to dominate pattern preservation under MAR, showing minimal degradation from MCAR results. Mean differences between SWRF-Impute and MissForest are negligible, indicating both methods equally respect the data's intrinsic dimensionality regardless of missingness structure.}
+\label{fig:mar_pattern}
+\end{figure}
+
+Under MAR, the results are nearly identical to MCAR, with MissForest marginally outperforming SWRF-Impute in point-wise RMSE ($171.17$ vs $174.23$). Both methods are robust to the dependence structure introduced by MAR.
+
+Notably, the eigenvalue preservation metrics are indistinguishable between MCAR and MAR for both SWRF-Impute and MissForest, suggesting that these methods reconstruct the spectral properties accurately even when missingness exhibits complex dependencies.
+
+\subsection{MNAR Results}
+
+\begin{figure}[h]
+\includegraphics[width=0.85\textwidth]{../output/mnar_validation_runs/performance.png}
+\centering
+\caption{MNAR mechanism: RMSE performance on masked entries under hidden confounding. MissForest achieves lowest RMSE, with SWRF-Impute following closely.}
+\label{fig:mnar_performance}
+\end{figure}
+
+\begin{figure}[h]
+\includegraphics[width=0.85\textwidth]{../output/mnar_validation_runs/pattern.png}
+\centering
+\caption{MNAR mechanism: Log $L^2$ distance from true eigenvalue spectrum. SWRF-Impute and MissForest achieve the best eigenvalue preservation across all three mechanisms. MissForest achieves marginally superior spectrum preservation.}
+\label{fig:mnar_pattern}
+\end{figure}
+
+Under MNAR, both SWRF-Impute and MissForest continue to outperform all baselines. RMSE metrics are comparable to MCAR/MAR, indicating robustness to hidden confounding. Remarkably, eigenvalue preservation is optimal under MNAR, the best across all three mechanisms.
+
+This may be due to the fact that the difference in missingness mechanisms at high missingness (> 0.5) is not very pronounced. When most values are missing, MCAR, MAR, and MNAR become mathematically similar.
+
+\section{Conclusions}
+
+Validation results demonstrate that SWRF-Impute achieves competitive or superior performance to MissForest across MCAR, MAR, and MNAR mechanisms. Both random forest methods substantially outperform simpler baselines (mean, median, KNN, MICE) in both point-estimate accuracy and preservation of statistical structure.
+
+Most of the validation was performed at high missingness (> 0.5), which may have contributed to the relative similarity between the results across missingess mechanisms. It might be wise to narrow the scope of missingness, as high missingness results are noisy and similar across mechanisms.
+
+However, due to the stability of SWRF's performance, the results support the adoption of SWRF-Impute as a reliable imputation strategy, particularly where statistical structure (e.g., eigenvalue spectra) must be preserved for downstream analysis.
+
+\bibliography{references}
+
+\end{document}

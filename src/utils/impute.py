@@ -174,7 +174,6 @@ def EfficientPseudoGibbs(X, X_init,n_iters=15,burn_in=10,n_trees=30,max_depth=10
   
   # Finally, the iteration
   for i in range(n_iters):
-    print(f"Iteration {i+1}:")
     # Train the random forest for each feature
     for p in range(num_features):
       mp = missing_rows[p]
@@ -200,8 +199,6 @@ def EfficientPseudoGibbs(X, X_init,n_iters=15,burn_in=10,n_trees=30,max_depth=10
       rf.fit(X_opnegp, x_opp, sample_weight=row_weights)
       
       # The random forest is now trained for this feature!
-    
-    print("    Trained!")
     
     # Now do the draws
     for k in range(draws_per_iter):
@@ -239,8 +236,6 @@ def EfficientPseudoGibbs(X, X_init,n_iters=15,burn_in=10,n_trees=30,max_depth=10
       
       # Save to the output
       output.append(X.copy())
-    
-      print(f"    {k+1}/{draws_per_iter} draws complete")
     
   # Done with the iteration
   # Remove the burn in iterations

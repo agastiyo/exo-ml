@@ -35,63 +35,51 @@ def RMSE_masked(X_original,X_imputed,mask):
 def eig_log_l2(true, imp, eps=1e-8):
   return np.sqrt(np.sum((np.log(true + eps) - np.log(imp + eps))**2))
 
-# MAR mask a dataset using trigger-based row masking
-# Trigger feature is randomly chosen, rows with extreme trigger values get masked
-def MAR_mask(X_known, prop_missing):
+# MNAR mask a dataset with a given missing proportion
+# Follows the Missing Based on Unobserved Variables (MBUV) strategy
+def MNAR_mask(X_known, prop_missing):
   N, P = X_known.shape
-  
-  # Calculate total cells to mask
-  n_cells_mask = int(np.floor(prop_missing * N * P))
-  
-  # Randomly select a trigger feature
-  trigger_idx = np.random.randint(0, P)
-  
-  # Get trigger feature and compute z-scores
-  trigger_feature = X_known[:, trigger_idx]
-  mu = np.nanmean(trigger_feature)
-  sigma = np.nanstd(trigger_feature)
-  z_scores = (trigger_feature - mu) / (sigma + 1e-10)  # Add small epsilon to avoid division by zero
-  
-  # Rank observations by absolute z-score (extremity)
-  abs_z = np.abs(z_scores)
-  extremity_order = np.argsort(-abs_z)  # Descending order (most extreme first)
-  
-  # Create mask (False = observed, True = missing)
+  X_masked = X_known.copy()
   mask = np.zeros((N, P), dtype=bool)
   
-  # Number of rows to mask (rows with most extreme trigger values)
+  # 1. Generate unobserved feature from standard normal distribution
+  f_unobserved = np.random.standard_normal(N)
+  
+  # 2. Rank by extremity: sort by absolute z-score values (already standardized)
+  extremity_indices = np.argsort(-np.abs(f_unobserved))  # descending order
+  
+  # 3. Mask row features for top observations
   n_rows_to_mask = int(np.ceil(prop_missing * P))
+  n_target_missing = int(prop_missing * N * P)
   
-  # Mask all features except trigger in top extreme rows
-  masked_count = 0
-  for i in range(n_rows_to_mask):
-    row_idx = extremity_order[i]
+  # For each of the top rows ranked by extremity
+  for row_idx in extremity_indices[:n_rows_to_mask]:
+    # Randomly select one feature to keep (not mask)
+    keep_feature = np.random.randint(0, P)
+    # Mask all features except the one we keep
     for col_idx in range(P):
-      if col_idx != trigger_idx:  # Never mask the trigger feature
+      if col_idx != keep_feature:
+        X_masked[row_idx, col_idx] = np.nan
         mask[row_idx, col_idx] = True
-        masked_count += 1
   
-  # If we haven't masked enough cells yet, randomly mask remaining unmasked cells
-  if masked_count < n_cells_mask:
-    remaining_cells = n_cells_mask - masked_count
-    
-    # Find all currently unmasked cells
-    unmasked_positions = np.where(~mask)
-    unmasked_count = len(unmasked_positions[0])
-    
-    if unmasked_count > 0:
-      # Randomly select cells to mask from unmasked ones
-      n_to_mask_random = min(remaining_cells, unmasked_count)
-      random_indices = np.random.choice(unmasked_count, size=n_to_mask_random, replace=False)
-      
+  # 4. Count current masked cells
+  current_masked = np.sum(mask)
+  
+  # Fill remaining mask if needed
+  if current_masked < n_target_missing:
+    remaining_to_mask = n_target_missing - current_masked
+    # Find all unmasked cells
+    unmasked_cells = np.where(~mask)
+    # Randomly select remaining cells to mask
+    if len(unmasked_cells[0]) > 0:
+      random_indices = np.random.choice(len(unmasked_cells[0]), 
+                                       size=min(remaining_to_mask, len(unmasked_cells[0])), 
+                                       replace=False)
       for idx in random_indices:
-        row = unmasked_positions[0][idx]
-        col = unmasked_positions[1][idx]
+        row = unmasked_cells[0][idx]
+        col = unmasked_cells[1][idx]
+        X_masked[row, col] = np.nan
         mask[row, col] = True
-  
-  # Create masked data (NaN for missing values)
-  X_masked = X_known.copy()
-  X_masked[mask] = np.nan
   
   return X_masked, mask
 
@@ -152,7 +140,7 @@ for j in range(n_tot):
     print(prop_missing)
     
     # Create the mask for this missingness level
-    X_masked, mask = MAR_mask(X_known, prop_missing)
+    X_masked, mask = MNAR_mask(X_known, prop_missing)
     
     # --------------------------------------------
 
@@ -211,7 +199,7 @@ for j in range(n_tot):
     mean_diff_dict[name].append(diff_dict[name])
     eigval_dists_dict[name].append(eigvals_dict[name])
 
-save_dir = "output/mar_validation_runs"
+save_dir = "output/mnar_validation_runs"
 os.makedirs(save_dir, exist_ok=True)
 
 np.save(f"{save_dir}/mean_diff.npy", mean_diff_dict)
@@ -227,7 +215,7 @@ for name in ["Mean", "Median", "KNN", "MissForest", "MICE", "SWRF-Impute"]:
 
 plt.xlabel("Fraction of Missing Data", fontsize=12)
 plt.ylabel("RMSE (on masked entries)", fontsize=12)
-plt.title("MAR Imputation Performance", fontsize=14)
+plt.title("MNAR Imputation Performance", fontsize=14)
 
 plt.grid(alpha=0.3)
 plt.legend()
@@ -243,12 +231,11 @@ for name in ["Mean", "Median", "KNN", "MissForest", "MICE", "SWRF-Impute"]:
 
 plt.xlabel("Fraction of Missing Data", fontsize=12)
 plt.ylabel("Log L2 dist from true Eigval spectra", fontsize=12)
-plt.title("MAR Pattern Destruction", fontsize=14)
+plt.title("MNAR Pattern Destruction", fontsize=14)
 
 plt.grid(alpha=0.3)
 plt.legend()
 plt.tight_layout()
 plt.savefig(f"{save_dir}/pattern.png")
-
-
+  
 # %%
