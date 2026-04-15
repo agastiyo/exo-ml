@@ -5,7 +5,7 @@ def RunPCA(X):
   scaler = StandardScaler()
   X_standard = scaler.fit_transform(X)
   
-  C = (1 / (X_standard.shape[1] - 1)) * (X_standard.T @ X_standard)
+  C = (1 / (X_standard.shape[0] - 1)) * (X_standard.T @ X_standard)
   
   eigvals, eigvecs = np.linalg.eig(C)
   

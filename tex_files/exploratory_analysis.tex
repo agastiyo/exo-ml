@@ -97,10 +97,10 @@ From the \textit{STELLARHOSTS} table, categorical parameters \verb|sy_name|, \ve
   \label{tab:nan_distribution}
 \end{table}
 
-\subsection{Small-sample PCA}
-Given the high proportion of missing values in many of the numerical parameters, a small-sample PCA approach was adopted to perform an initial, exploratory analysis. This method involved selecting a subset of the data that contained complete cases for a chosen set of parameters, allowing a trial run of PCA for initial results to be performed without the need for imputation. A NaN limit $\tau$ was defined, and only parameters with a proportion of missing values less than $\tau$ were included in the PCA. The raw results of all small-sample PCA runs are included in \autoref{sec:appendix_a}.
+\subsection{Complete Case PCA}
+Given the high proportion of missing values in many of the numerical parameters, a complete case PCA approach was adopted to perform an initial, exploratory analysis. This method involved selecting a subset of the data that contained complete cases for a chosen set of parameters, allowing a trial run of PCA for initial results to be performed without the need for imputation. A NaN limit $\tau$ was defined, and only parameters with a proportion of missing values less than $\tau$ were included in the PCA. The raw results of all complete case PCA runs are included in \autoref{sec:appendix_a}.
 
-Small-sample PCA with $\tau = 0.50$ yielded 2,359 rows of data with 5 principal components that together explained 93.21\% of the variance.
+Complete case PCA with $\tau = 0.50$ yielded 2,359 rows of data with 5 principal components that together explained 93.21\% of the variance.
 \begin{enumerate}
   \item \textbf{Principal Component 1 (24.70\% variance explained)} was strongly influenced by mass (0.72) and radius (0.53), and mildly influenced by temperature (0.34) and the planet count(-0.25). This is a clear main-sequence star component, ranging from large, hot, massive stars to smaller, cooler stars. Planet count has in inverse relationship with the size, mass, and temperature. This could be due to observational biases, as larger, hotter stars tend to be more luminous making transit detections and direct imaging difficult. More massive stars also are less influenced by their exoplanets' gravity, making radial velocity detections difficult as well.
   \item \textbf{Principal Component 2 (21.54\% variance explained)} was strongly influenced by temperature (-0.61), metallicity (-0.60), and radius (0.51). This component may show an inverse relationship between stellar host size and temperature/metallicity. This is a strange result, as larger stars are typically hotter and more metal-rich. This can be also attributed to observational bias. Detecting planets around larger, hotter stars is more difficult, so the sample of host stars with measured parameters would not include many of these.
@@ -111,7 +111,7 @@ Small-sample PCA with $\tau = 0.50$ yielded 2,359 rows of data with 5 principal 
 
 Overall, PC1 and 2 are likely due to observational biases against larger, hotter stars. PC3 and 4 show the variance in exoplanet systems themselves, with PC3 showing the influence of gravitational interactions in multi-star systems and PC4 showing the influence of stellar mass on planet formation. PC5 shows a known relationship between metallicity and temperature. These results suggest that the PCA is capturing meaningful patterns in the data, but also highlights the limitations of the dataset due to missing values and observational biases.
 
-Small-sample PCA with $\tau=0.70$ yielded 583 rows of data with 6 principal components that together explained 95.88\% of the variance. The results were similar to the $\tau=0.50$ case, but with some differences in the loadings and variance explained by each component.
+Complete case PCA with $\tau=0.70$ yielded 583 rows of data with 6 principal components that together explained 95.88\% of the variance. The results were similar to the $\tau=0.50$ case, but with some differences in the loadings and variance explained by each component.
 \begin{enumerate}
   \item \textbf{Principal Component 1 (44.53\% variance explained)} was strongly influenced by mass (0.48), radius (0.42), temperature (0.44), log g (-0.46), and mildly influenced by density (-0.37). This is a clear main-sequence star component, ranging from smaller, cooler stars with higher surface gravity and density to larger, hotter stars with lower surface gravity and density. The system parameters contribute weakly, suggesting that most variation in the data is due to intrinsic stellar properties. This component is similar to PC1 in the $\tau=0.50$ case, but with no clear correlation with the number of planets.
   \item \textbf{Principal Component 2 (12.80\% variance explained)} was strongly influenced by age (-0.59), metallicity (-0.53), number of stars (0.49). This component ranges from young, metal-poor stars with more stellar companions to older, metallic stars with fewer companions. This is another astrophysical component, with only weak interactions with the system parameters. This may also be an orthogonal component to the age-metallicity relation, which is a known phenomenon explored by \citet{twarogChemicalEvolutionSolar1980} and \citet{edvardssonChemicalEvolutionGalactic1993}.
@@ -125,17 +125,17 @@ With more components falling within the threshold, the number sample size decrea
 
 Raising $\tau$ higher than 0.70 greatly diminished the sample size with respect to data dimensionality\footnote{Assuming a well-sampled dataset has $2^D$ samples where $D$ is the number of dimensions.}, and the results were not as meaningful.
 
-Though it contained more samples, $\tau=0.50$ had more components that were likely due to observational biases, while $\tau=0.70$ had fewer samples but more astrophysically meaningful components. This highlights the trade-off between sample size and data quality when performing PCA on datasets with missing values. The small-sample PCA approach provided valuable insights into the underlying structure of the data, but also underscored the limitations of the dataset and the need for careful interpretation of the results.
+Though it contained more samples, $\tau=0.50$ had more components that were likely due to observational biases, while $\tau=0.70$ had fewer samples but more astrophysically meaningful components. This highlights the trade-off between sample size and data quality when performing PCA on datasets with missing values. The complete case PCA approach provided valuable insights into the underlying structure of the data, but also underscored the limitations of the dataset and the need for careful interpretation of the results.
 
-Both small-sample PCA runs uncovered known astrophysical phenomena and also suggested an inverse relationship between planet count and star count in a system. Though the majority of variance is from intrinsic stellar properties, the system properties also show a non-negligible influence on the variance in the data, suggesting that the dataset contains meaningful patterns related to stellar properties and their influence on exoplanet systems.
+Both complete case PCA runs uncovered known astrophysical phenomena and also suggested an inverse relationship between planet count and star count in a system. Though the majority of variance is from intrinsic stellar properties, the system properties also show a non-negligible influence on the variance in the data, suggesting that the dataset contains meaningful patterns related to stellar properties and their influence on exoplanet systems.
 
 \subsection{Extensions to PCA}
 
-This preliminary analysis demonstrated the likelihood of finding underlying patterns in the stellar host data, but did not directly answer the research question of how stellar host parameters influence exoplanet system properties. To address this, the system parameters can be dropped and small-sample PCA can be performed again to identify the main components of variance in the stellar parameters alone. Then, the system parameters can be projected onto these components to analyze how they relate to the underlying structure of the stellar host properties. This approach would allow for a more direct analysis of the influence of stellar host parameters on exoplanet system properties, while still accounting for the limitations of the dataset.
+This preliminary analysis demonstrated the likelihood of finding underlying patterns in the stellar host data, but did not directly answer the research question of how stellar host parameters influence exoplanet system properties. To address this, the system parameters can be dropped and complete case PCA can be performed again to identify the main components of variance in the stellar parameters alone. Then, the system parameters can be projected onto these components to analyze how they relate to the underlying structure of the stellar host properties. This approach would allow for a more direct analysis of the influence of stellar host parameters on exoplanet system properties, while still accounting for the limitations of the dataset.
 
 A selected number of stars with no exoplanets can also be included in the analysis to provide a more comprehensive view of the relationships between stellar properties and planet formation. This would allow for a comparison between stars with and without exoplanets, potentially revealing differences in stellar properties that are conducive to planet formation. The number of non-host stars included should be carefully chosen to balance the representation of different stellar types and to avoid introducing additional biases into the analysis.
 
-However, the high proportion of missing values and observational biases limit the conclusions that can be drawn from small-sample PCA. To address this issue, the missing data must be imputed and the full dataset must be artificially extended to perform more comprehensive PCA on a larger number of parameters. This must be done with observational biases in mind, as the missing data is not random, and the possibility of undetected exoplanets exists for all star systems.
+However, the high proportion of missing values and observational biases limit the conclusions that can be drawn from complete case PCA. To address this issue, the missing data must be imputed and the full dataset must be artificially extended to perform more comprehensive PCA on a larger number of parameters. This must be done with observational biases in mind, as the missing data is not random, and the possibility of undetected exoplanets exists for all star systems.
 
 \section{Data Imputation through Pseudo-Gibbs Sampling}
 
@@ -178,198 +178,193 @@ At this step, \citet{weiGSimpGibbsSampler2018} truncates the normal distribution
 This process is repeated for each feature with missing values, and the entire procedure is iterated until convergence, which can be defined as the point at which the imputed values stabilize or a maximum number of iterations is reached. By using this modified GSimp approach, we can effectively impute missing values in the stellar host dataset while accounting for the complex relationships between parameters and the non-random nature of the missing data.
 
 \appendix
-\section[Appendix A]{Small-sample PCA Results}
+\section[Appendix A]{Complete Case PCA Results}
 \label{sec:appendix_a}
 \subsection[A.1]{PCA with $\tau = 0.50$}
 Included parameters: \verb|sy_pnum|, \verb|sy_snum|, \verb|st_teff|, \verb|st_rad|, \verb|st_mass|, and \verb|st_met_FeH|. Data matrix $\mathbf{X} \in \mathbb{R}^{2359 \times 6}$. The raw results are as follows:
 \begin{verbatim}
 Principal Component 1:
-  Eigenvalue: 699.2216
+  Eigenvalue: 1.4827
   Proportion of Variance: 24.7005%
   Contribution of Features:
-        # of Planets: -0.2487
-          # of Stars:  0.1353
-               T_eff:  0.3366
-              Radius:  0.5344
-                Mass:  0.7214
-                Fe/H:  0.0242
-
+             sy_pnum: -0.2487
+             sy_snum:  0.1353
+             st_teff:  0.3366
+              st_rad:  0.5344
+             st_mass:  0.7214
+          st_met_FeH:  0.0242
 Principal Component 2:
-  Eigenvalue: 609.6782
+  Eigenvalue: 1.2928
   Proportion of Variance: 21.5373%
   Contribution of Features:
-        # of Planets:  0.0566
-          # of Stars:  0.0334
-               T_eff: -0.6073
-              Radius:  0.5143
-                Mass: -0.0643
-                Fe/H: -0.5985
-
+             sy_pnum:  0.0566
+             sy_snum:  0.0334
+             st_teff: -0.6073
+              st_rad:  0.5143
+             st_mass: -0.0643
+          st_met_FeH: -0.5985
 Principal Component 3:
-  Eigenvalue: 481.8507
+  Eigenvalue: 1.0217
   Proportion of Variance: 17.0217%
   Contribution of Features:
-        # of Planets: -0.5170
-          # of Stars:  0.8144
-               T_eff: -0.1505
-              Radius: -0.1613
-                Mass: -0.1421
-                Fe/H:  0.0260
-
+             sy_pnum: -0.5170
+             sy_snum:  0.8144
+             st_teff: -0.1505
+              st_rad: -0.1613
+             st_mass: -0.1421
+          st_met_FeH:  0.0260
 Principal Component 4:
-  Eigenvalue: 448.0784
+  Eigenvalue: 0.9501
   Proportion of Variance: 15.8287%
   Contribution of Features:
-        # of Planets: -0.8079
-          # of Stars: -0.5512
-               T_eff: -0.0916
-              Radius:  0.0524
-                Mass: -0.1729
-                Fe/H:  0.0493
-
+             sy_pnum: -0.8079
+             sy_snum: -0.5512
+             st_teff: -0.0916
+              st_rad:  0.0524
+             st_mass: -0.1729
+          st_met_FeH:  0.0493
 Principal Component 5:
-  Eigenvalue: 399.8554
+  Eigenvalue: 0.8479
   Proportion of Variance: 14.1252%
   Contribution of Features:
-        # of Planets:  0.1091
-          # of Stars:  0.0096
-               T_eff: -0.5352
-              Radius:  0.2790
-                Mass:  0.0524
-                Fe/H:  0.7881
-
+             sy_pnum:  0.1091
+             sy_snum:  0.0096
+             st_teff: -0.5352
+              st_rad:  0.2790
+             st_mass:  0.0524
+          st_met_FeH:  0.7881
 Principal Component 6:
-  Eigenvalue: 192.1158
+  Eigenvalue: 0.4074
   Proportion of Variance: 6.7866%
   Contribution of Features:
-        # of Planets: -0.0551
-          # of Stars: -0.1161
-               T_eff: -0.4477
-              Radius: -0.5859
-                Mass:  0.6501
-                Fe/H: -0.1308
+             sy_pnum: -0.0551
+             sy_snum: -0.1161
+             st_teff: -0.4477
+              st_rad: -0.5859
+             st_mass:  0.6501
+          st_met_FeH: -0.1308
 \end{verbatim}
 
 \subsection[A.2]{PCA with $\tau = 0.70$}
 Included parameters: \verb|sy_pnum|, \verb|sy_snum|, \verb|st_teff|, \verb|st_rad|, \verb|st_mass|, \verb|st_met_FeH|, \verb|st_logg|, \verb|st_age|, and \verb|st_dens|. Data matrix $\mathbf{X} \in \mathbb{R}^{583 \times 9}$. The raw results are as follows:
 \begin{verbatim}
 Principal Component 1:
-  Eigenvalue: 292.0596
+  Eigenvalue: 4.0146
   Proportion of Variance: 44.5298%
   Contribution of Features:
-        # of Planets: -0.1036
-          # of Stars: -0.0421
-               T_eff:  0.4388
-              Radius:  0.4173
-                Mass:  0.4818
-                Fe/H:  0.1299
-               log g: -0.4587
-                 age: -0.1634
-             density: -0.3671
+             sy_pnum: -0.1036
+             sy_snum: -0.0421
+             st_teff:  0.4388
+              st_rad:  0.4173
+             st_mass:  0.4818
+          st_met_FeH:  0.1299
+             st_logg: -0.4587
+              st_age: -0.1634
+             st_dens: -0.3671
 Principal Component 2:
-  Eigenvalue: 83.9347
+  Eigenvalue: 1.1537
   Proportion of Variance: 12.7974%
   Contribution of Features:
-        # of Planets:  0.2363
-          # of Stars:  0.4942
-               T_eff:  0.1891
-              Radius: -0.0552
-                Mass:  0.0936
-                Fe/H: -0.5313
-               log g:  0.1009
-                 age: -0.5895
-             density:  0.1111
+             sy_pnum:  0.2363
+             sy_snum:  0.4942
+             st_teff:  0.1891
+              st_rad: -0.0552
+             st_mass:  0.0936
+          st_met_FeH: -0.5313
+             st_logg:  0.1009
+              st_age: -0.5895
+             st_dens:  0.1111
 Principal Component 3:
-  Eigenvalue: 79.9430
+  Eigenvalue: 1.0989
   Proportion of Variance: 12.1888%
   Contribution of Features:
-        # of Planets: -0.7382
-          # of Stars:  0.5564
-               T_eff: -0.0709
-              Radius: -0.0334
-                Mass:  0.0087
-                Fe/H:  0.3287
-               log g:  0.0594
-                 age: -0.1103
-             density:  0.1244
+             sy_pnum: -0.7382
+             sy_snum:  0.5564
+             st_teff: -0.0709
+              st_rad: -0.0334
+             st_mass:  0.0087
+          st_met_FeH:  0.3287
+             st_logg:  0.0594
+              st_age: -0.1103
+             st_dens:  0.1244
 Principal Component 4:
-  Eigenvalue: 68.4983
+  Eigenvalue: 0.9416
   Proportion of Variance: 10.4438%
   Contribution of Features:
-        # of Planets: -0.0742
-          # of Stars:  0.4042
-               T_eff: -0.0301
-              Radius:  0.2025
-                Mass: -0.0860
-                Fe/H: -0.5162
-               log g: -0.2252
-                 age:  0.6667
-             density: -0.1420
+             sy_pnum: -0.0742
+             sy_snum:  0.4042
+             st_teff: -0.0301
+              st_rad:  0.2025
+             st_mass: -0.0860
+          st_met_FeH: -0.5162
+             st_logg: -0.2252
+              st_age:  0.6667
+             st_dens: -0.1420
 Principal Component 5:
-  Eigenvalue: 57.0557
+  Eigenvalue: 0.7843
   Proportion of Variance: 8.6992%
   Contribution of Features:
-        # of Planets: -0.5663
-          # of Stars: -0.5204
-               T_eff:  0.0104
-              Radius:  0.1387
-                Mass: -0.0239
-                Fe/H: -0.5281
-               log g: -0.0412
-                 age: -0.1531
-             density:  0.2909
+             sy_pnum: -0.5663
+             sy_snum: -0.5204
+             st_teff:  0.0104
+              st_rad:  0.1387
+             st_mass: -0.0239
+          st_met_FeH: -0.5281
+             st_logg: -0.0412
+              st_age: -0.1531
+             st_dens:  0.2909
 Principal Component 6:
-  Eigenvalue: 46.6860
+  Eigenvalue: 0.6417
   Proportion of Variance: 7.1181%
   Contribution of Features:
-        # of Planets:  0.2415
-          # of Stars:  0.0993
-               T_eff: -0.3310
-              Radius:  0.5747
-                Mass: -0.0504
-                Fe/H:  0.1665
-               log g: -0.3135
-                 age: -0.0790
-             density:  0.5977
+             sy_pnum:  0.2415
+             sy_snum:  0.0993
+             st_teff: -0.3310
+              st_rad:  0.5747
+             st_mass: -0.0504
+          st_met_FeH:  0.1665
+             st_logg: -0.3135
+              st_age: -0.0790
+             st_dens:  0.5977
 Principal Component 7:
-  Eigenvalue: 22.6299
+  Eigenvalue: 0.3111
   Proportion of Variance: 3.4503%
   Contribution of Features:
-        # of Planets: -0.0622
-          # of Stars: -0.0159
-               T_eff: -0.5741
-              Radius:  0.2306
-                Mass: -0.3287
-                Fe/H: -0.0789
-               log g: -0.0805
-                 age: -0.3531
-             density: -0.6064
+             sy_pnum: -0.0622
+             sy_snum: -0.0159
+             st_teff: -0.5741
+              st_rad:  0.2306
+             st_mass: -0.3287
+          st_met_FeH: -0.0789
+             st_logg: -0.0805
+              st_age: -0.3531
+             st_dens: -0.6064
 Principal Component 8:
-  Eigenvalue: 3.2212
+  Eigenvalue: 0.0443
   Proportion of Variance: 0.4911%
   Contribution of Features:
-        # of Planets: -0.0038
-          # of Stars:  0.0033
-               T_eff: -0.0534
-              Radius: -0.5767
-                Mass: -0.1679
-                Fe/H: -0.0050
-               log g: -0.7863
-                 age: -0.1023
-             density:  0.0872
+             sy_pnum: -0.0038
+             sy_snum:  0.0033
+             st_teff: -0.0534
+              st_rad: -0.5767
+             st_mass: -0.1679
+          st_met_FeH: -0.0050
+             st_logg: -0.7863
+              st_age: -0.1023
+             st_dens:  0.0872
 Principal Component 9:
-  Eigenvalue: 1.8466
+  Eigenvalue: 0.0254
   Proportion of Variance: 0.2815%
   Contribution of Features:
-        # of Planets:  0.0069
-          # of Stars: -0.0105
-               T_eff: -0.5690
-              Radius: -0.2134
-                Mass:  0.7825
-                Fe/H: -0.1165
-               log g:  0.0210
-                 age:  0.0656
-             density:  0.0071
+             sy_pnum:  0.0069
+             sy_snum: -0.0105
+             st_teff: -0.5690
+              st_rad: -0.2134
+             st_mass:  0.7825
+          st_met_FeH: -0.1165
+             st_logg:  0.0210
+              st_age:  0.0656
+             st_dens:  0.0071
 \end{verbatim}
 
 \bibliography{references}
