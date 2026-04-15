@@ -93,6 +93,27 @@ We quantify the distance between spectra using logarithmic $L^2$ distance:
 
 where $\epsilon = 10^{-8}$ provides numerical stability. This log-scale distance is appropriate for eigenvalues spanning multiple orders of magnitude and emphasizes relative differences. Lower values indicate that the imputation preserves the correlational structure of the data, which is critical for downstream analysis.
 
+\subsection{Uncertainty Calibration: IQR Coverage}
+
+RMSE and eigenvalue distance both evaluate the \emph{point estimate} produced by pooling an imputation ensemble. Neither captures whether the ensemble itself reflects well-calibrated uncertainty about the missing values. To probe this, we report a complementary metric that is only defined for stochastic methods.
+
+Let $\mathcal{E} = \{\mathbf{X}_{\text{imp}}^{(k)}\}_{k=1}^{K}$ be the ensemble of $K$ imputed matrices produced by a stochastic method. For each cell $(i,j)$ we compute the 25th and 75th percentiles across the ensemble:
+
+\begin{equation}
+  Q_{25}(i,j) = \operatorname{Percentile}_{25}\bigl(\{\mathbf{X}_{\text{imp}}^{(k)}(i,j)\}_{k=1}^{K}\bigr), \quad
+  Q_{75}(i,j) = \operatorname{Percentile}_{75}\bigl(\{\mathbf{X}_{\text{imp}}^{(k)}(i,j)\}_{k=1}^{K}\bigr)
+\end{equation}
+
+The IQR coverage on masked entries is then the fraction of ground-truth values that fall inside the cell-wise interquartile range:
+
+\begin{equation}
+  C_{\text{IQR}} = \frac{1}{\sum_{i,j} \mathbf{M}_{i,j}} \sum_{i,j} \mathbf{M}_{i,j} \cdot \mathbf{1}\bigl[Q_{25}(i,j) \leq \mathbf{X}_{orig,i,j} \leq Q_{75}(i,j)\bigr]
+\end{equation}
+
+A well-calibrated imputer draws values that spread around the truth in proportion to its uncertainty; because an IQR spans the middle 50\% of a distribution by construction, such an imputer should have $C_{\text{IQR}} \approx 0.5$. Values below $0.5$ indicate under-dispersed (over-confident) draws --- the ensemble concentrates too tightly to cover the truth half the time. Values above $0.5$ indicate over-dispersed (under-confident) draws. This metric directly probes one of SWRF-Impute's central claims: that its multi-draw Gibbs-style output produces calibrated, rather than merely plausible, uncertainty estimates. The IQR (as opposed to a wider interval such as 90\%) is chosen because with $K = 35$ draws per ensemble the outer quantiles are noisy estimates of the tails.
+
+The metric is only defined for stochastic methods. For MICE and MissForest the ensemble is the set of $n_{\text{runs}}$ independently sampled imputations; for SWRF-Impute it is the post-burn-in Gibbs chain.
+
 \section{Validation Methodology}
 
 Across all three missing data mechanisms (MCAR, MAR, and MNAR), the validation pipeline is identical except for mask generation.
@@ -122,18 +143,25 @@ The following six algorithms are evaluated identically for all three mechanisms:
 
 \subsection{Stochastic Method Handling}
 
-For stochastic methods (MICE and SWRF-Impute), a multiple run protocol is employed to account for stochasticity:
+All stochastic methods (MICE, MissForest, and SWRF-Impute) are evaluated on a pooled point estimate: multiple imputed matrices are generated and then averaged cell-wise into a single matrix before computing RMSE and eigenvalue distance. Evaluating all stochastic methods on the pooled matrix, rather than averaging per-run metrics, places them on equal footing and is consistent with the Rubin's rules approach to multiple imputation.
 
 \begin{enumerate}
-  \item MICE is executed $n_{\text{runs}} = 35$ times per missingness level. Each run uses a different random seed. The results are averaged to produce a point dataset estimate.
-  \item For SWRF-Impute: With default settings, a Markov chain of length 35 is produced. The generated chain is averaged to produce a point dataset estimate.
+  \item \textbf{MICE}: executed $n_{\text{runs}} = 35$ independent times per missingness level, each with a distinct seed drawn from a seeded random generator. The 35 resulting imputed matrices are averaged cell-wise to form the pooled point estimate used for evaluation.
+  \item \textbf{MissForest}: executed $n_{\text{runs}} = 35$ independent times per missingness level, each with a distinct seed, and the 35 imputed matrices are averaged cell-wise. Unlike simple deterministic use of MissForest (single run with a fixed seed), this accounts for the variance introduced by Random Forest bootstrap sampling.
+  \item \textbf{SWRF-Impute}: a single Gibbs-style chain is run with $n_{\text{iters}} = 15$ iterations and $\text{draws\_per\_iter} = 3$, producing 45 total draws. After discarding a burn-in of $b = 10$ draws, the remaining 35 post-burn-in draws are averaged cell-wise to form the pooled point estimate.
 \end{enumerate}
+
+\subsection{Reproducibility}
+
+All mask generation and stochastic imputation is driven by a single seeded \texttt{numpy.random.Generator} (via \texttt{numpy.random.default\_rng}). A master seed initialises the generator; independent child generators for each (iteration, missingness level) pair are derived by drawing 32-bit integer seeds from the master. This ensures all experiments are fully reproducible while keeping individual mask realisations statistically independent of one another.
+
+The seed thread runs through the entire pipeline. SWRF-Impute's internal random operations---initialisation draws from the prior distribution, Random Forest bootstrap sampling, and truncated-normal draws at each Gibbs step---all accept the child generator directly. MICE and MissForest receive integer seeds derived from the same master generator for each of their $n_{\text{runs}}$ calls.
 
 \subsection{Result Aggregation}
 
 A single full test consists of:
 \begin{itemize}
-  \item Evaluation at 9 missingness levels: $\{0.1, 0.2, \ldots, 0.9\}$
+  \item Evaluation at 6 missingness levels: $\{0.1, 0.2, \ldots, 0.6\}$
   \item 6 imputation algorithms
 \end{itemize}
 
@@ -172,7 +200,7 @@ In MAR data, the probability that a value is missing depends on observed variabl
   \item \textbf{Standardize trigger feature}: Compute z-scores for all observations in the trigger feature: $z_i = \frac{f_{\text{trigger},i} - \mu}{\sigma}$ for $i = 1, \ldots, N$
   \item \textbf{Rank by extremity}: Sort observations by the absolute value of z-score $|z_i|$ in descending order (most extreme values first)
   \item \textbf{Mask row features}: For the top $\lceil \text{prop\_missing} \times N \rceil$ observations (ranked by extremity), mask all features except the trigger feature $f_{\text{trigger}}$. This ensures observations with extreme trigger values lose information across multiple features but retain the trigger itself.
-  \item \textbf{Fill remaining mask}: If the total number of masked cells is less than $n_{\text{missing}}$, randomly select from remaining unmasked cells until the target proportion is reached
+  \item \textbf{Fill remaining mask}: If the total number of masked cells is less than $n_{\text{missing}}$, randomly select from remaining unmasked cells until the target proportion is reached.
 \end{enumerate}
 
 This mechanism creates MAR patterns where missingness is ignorable given the observed trigger feature. Observations with extreme trigger values (high $|z|$) experience widespread missingness in other features, but the trigger feature remains fully observed.
@@ -187,7 +215,7 @@ Our version of the algorithm operates as follows:
   \item \textbf{Generate unobserved feature}: Generate a standardized unobserved feature $f_{\text{unobserved}}$ following a normal distribution.
   \item \textbf{Rank by extremity}: Sort observations of $f_{\text{unobserved}}$ by the absolute value of z-score $|z_i|$ in descending order (most extreme values first)
   \item \textbf{Mask row features}: For the top $\lceil \text{prop\_missing} \times N \rceil$ observations (ranked by extremity), mask all but one randomly selected feature.
-  \item \textbf{Fill remaining mask}: If the total number of masked cells is less than $n_{\text{missing}}$, randomly select from remaining unmasked cells until the target proportion is reached
+  \item \textbf{Fill remaining mask}: If the total number of masked cells is less than $n_{\text{missing}}$, randomly select from the remaining unmasked cells to reach the target proportion.
 \end{enumerate}
 
 \bibliography{references}
