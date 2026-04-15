@@ -123,27 +123,30 @@ def PseudoGibbsImputer(X, X_initializer, regressor:RandomForestRegressor, save_d
   
   return X,rmse_hist
 
-def EfficientPseudoGibbs(X, X_init,n_iters=15,burn_in=10,n_trees=30,max_depth=10,draws_per_iter=3,weight_str=1,stochastic_str=0.25):
+def EfficientPseudoGibbs(X, X_init,n_iters=15,burn_in=10,n_trees=30,max_depth=10,draws_per_iter=3,weight_str=1,stochastic_str=0.25,rng=None):
   # Due diligence
   assert X.shape[1] == X_init.shape[1]
-  
+
+  if rng is None:
+    rng = np.random.default_rng()
+
   X = X.copy()
   output = []
   num_features = X.shape[1]
-  
+
   # Step 1: Create mask array
   isImputed = np.isnan(X)
-  
+
   # Step 2: Initialize from X_init
   for currCol in range(num_features):
     init_data = X_init[:,currCol]
     init_data = init_data[~np.isnan(init_data)] # Get rid of NaN values
-    
+
     nanRows = np.isnan(X[:, currCol]) # Mask of nan rows in this col
     N = nanRows.sum() # Number of nan rows in this col
-    
-    draws = np.random.randint(0,len(init_data),N) # draws from the initial distribution
-    
+
+    draws = rng.integers(0, len(init_data), N) # draws from the initial distribution
+
     X[nanRows,currCol] = init_data[draws] # Initialize the data matrix with the draws
   
   # Step 3: Define the bounds for each feature
@@ -169,8 +172,11 @@ def EfficientPseudoGibbs(X, X_init,n_iters=15,burn_in=10,n_trees=30,max_depth=10
   # Next, define the predictor columns for each feature (X_-p)
   predictor_cols = [np.delete(np.arange(num_features), i) for i in range(num_features)]
   
-  # Next, define the random forests for each feature
-  forests = [ clone(RandomForestRegressor(n_estimators=n_trees, max_depth=max_depth, n_jobs=-1)) for _ in range(num_features) ]
+  # Next, define the random forests for each feature.
+  # Each forest gets a seed derived from rng so bootstrap sampling is reproducible.
+  forests = [ RandomForestRegressor(n_estimators=n_trees, max_depth=max_depth, n_jobs=-1,
+                                    random_state=int(rng.integers(0, 2**31)))
+              for _ in range(num_features) ]
   
   # Finally, the iteration
   for i in range(n_iters):
@@ -229,7 +235,7 @@ def EfficientPseudoGibbs(X, X_init,n_iters=15,burn_in=10,n_trees=30,max_depth=10
         a = (lo - xPredicted_mpp) / sigma
         b = (hi - xPredicted_mpp) / sigma
 
-        yNew_mpp = truncnorm.rvs(a, b, loc=xPredicted_mpp, scale=sigma)
+        yNew_mpp = truncnorm.rvs(a, b, loc=xPredicted_mpp, scale=sigma, random_state=rng)
         
         # The new values 
         X[mp,p] = yNew_mpp
