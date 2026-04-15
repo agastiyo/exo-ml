@@ -52,7 +52,7 @@ def MCAR_mask(X_known, prop_missing):
 
 #%%
 # Define the total runs
-n_tot = 10
+n_tot = 1
 # Define the missing proportions you want to test
 props_missing = np.arange(0.1, 0.7, 0.1)
 # Define the number of runs for stochastic imputation methods

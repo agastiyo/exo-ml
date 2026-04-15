@@ -60,7 +60,7 @@ def MAR_mask(X_known, prop_missing):
   mask = np.zeros((N, P), dtype=bool)
   
   # Number of rows to mask (rows with most extreme trigger values)
-  n_rows_to_mask = int(np.ceil(prop_missing * P))
+  n_rows_to_mask = int(np.ceil(prop_missing * N))
   
   # Mask all features except trigger in top extreme rows
   masked_count = 0
@@ -97,7 +97,7 @@ def MAR_mask(X_known, prop_missing):
 
 #%%
 # Define the total runs
-n_tot = 10
+n_tot = 1
 # Define the missing proportions you want to test
 props_missing = np.arange(0.1, 0.7, 0.1)
 # Define the number of runs for stochastic imputation methods
