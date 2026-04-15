@@ -4,8 +4,7 @@ import os
 import matplotlib.pyplot as plt
 
 # Path to the timestamped run folder to plot.
-# e.g. "output/mcar_validation_runs/20260415_143022"
-run_dir = "output/mcar_validation_runs/REPLACE_WITH_TIMESTAMP"
+run_dir = "output/mnar_validation_runs/20260415_173740"
 
 #%%
 mean_diff_dict    = np.load(os.path.join(run_dir, "mean_diff.npy"),    allow_pickle=True).item()

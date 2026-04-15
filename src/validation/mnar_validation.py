@@ -2,6 +2,9 @@
 import numpy as np
 import src.utils.datamatrix as DMatrix
 from src.validation._common import run_validation
+import warnings
+
+warnings.filterwarnings("ignore")
 
 #%%
 tau = 0.7
@@ -59,6 +62,6 @@ def MNAR_mask(X_known, prop_missing, rng):
   return X_masked, mask
 
 #%%
-run_validation(MNAR_mask, "mnar", X_known, X_init)
+run_validation(MNAR_mask, "mnar", X_known, X_init, n_tot=1, n_runs=5)
 
 # %%

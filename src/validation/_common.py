@@ -42,7 +42,7 @@ def iqr_coverage(X_true, ensemble, mask):
   return float(np.mean(within))
 
 def run_validation(mask_fn, mechanism_name, X_known, X_init,
-                   n_tot=10, props_missing=None, n_runs=35, seed=42):
+                   n_tot=10, props_missing=None, n_runs=35, seed=None):
   """
   Run the full imputation validation harness for a given missingness mechanism.
 
@@ -68,8 +68,10 @@ def run_validation(mask_fn, mechanism_name, X_known, X_init,
   if props_missing is None:
     props_missing = np.arange(0.1, 0.7, 0.1)
   props_missing = np.asarray(props_missing)
-
-  rng = np.random.default_rng(seed)
+  
+  rng = np.random.default_rng()
+  if seed:
+    rng = np.random.default_rng(seed)
   eigvals_true, _ = PCA.RunPCA(X_known)
 
   mean_diff_dict    = {name: [] for name in METHOD_NAMES}
@@ -94,11 +96,14 @@ def run_validation(mask_fn, mechanism_name, X_known, X_init,
       # Deterministic methods — run once
 
       X_mean   = SimpleImputer(strategy='mean').fit_transform(X_masked)
+      print(f"    Mean Done")
       X_median = SimpleImputer(strategy='median').fit_transform(X_masked)
+      print(f"    Median Done")
 
       scaler  = StandardScaler()
       X_knn   = KNNImputer(n_neighbors=5).fit_transform(scaler.fit_transform(X_masked))
       X_knn   = scaler.inverse_transform(X_knn)
+      print(f"    KNN Done")
 
       for name, X_imp in [("Mean", X_mean), ("Median", X_median), ("KNN", X_knn)]:
         diff_dict[name].append(RMSE_masked(X_known, X_imp, mask))
@@ -112,6 +117,7 @@ def run_validation(mask_fn, mechanism_name, X_known, X_init,
       swrf_rng = np.random.default_rng(rng.integers(0, 2**31))
       X_out    = EfficientPseudoGibbs(X_masked, X_init, rng=swrf_rng)
       X_pgi    = np.mean(X_out, axis=0)
+      print(f"    SWRF Done")
 
       diff_dict["SWRF-Impute"].append(RMSE_masked(X_known, X_pgi, mask))
       eig, _ = PCA.RunPCA(X_pgi)
@@ -133,12 +139,14 @@ def run_validation(mask_fn, mechanism_name, X_known, X_init,
         X_mf = IterativeImputer(estimator=rf, max_iter=10,
                                 random_state=rf_state).fit_transform(X_masked)
         mf_matrices.append(X_mf)
+        print(f"    MissForest {_+1}/{n_runs}")
 
         # MICE
         mice_state = int(rng.integers(0, 2**31))
         X_mice = IterativeImputer(max_iter=10, random_state=mice_state,
                                    sample_posterior=True).fit_transform(X_masked)
         mice_matrices.append(X_mice)
+        print(f"    MICE {_+1}/{n_runs}")
 
       mf_ensemble    = np.stack(mf_matrices,   axis=0)
       mice_ensemble  = np.stack(mice_matrices, axis=0)

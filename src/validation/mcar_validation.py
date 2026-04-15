@@ -1,7 +1,10 @@
 #%%
 import numpy as np
+import warnings
 import src.utils.datamatrix as DMatrix
 from src.validation._common import run_validation
+
+warnings.filterwarnings("ignore")
 
 #%%
 tau = 0.7
@@ -24,6 +27,6 @@ def MCAR_mask(X_known, prop_missing, rng):
   return X_masked, np.isnan(X_masked)
 
 #%%
-run_validation(MCAR_mask, "mcar", X_known, X_init)
+run_validation(MCAR_mask, "mcar", X_known, X_init, n_tot=1, n_runs=5)
 
 # %%
