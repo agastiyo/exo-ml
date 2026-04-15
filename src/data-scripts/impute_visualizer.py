@@ -11,7 +11,7 @@ X = DMatrix.X(tau)
 X_init = DMatrix.X_init(tau)
 feature_cols = DMatrix.feature_names(tau)
 
-X_output = EfficientPseudoGibbs(X,X_init,n_trees=200)
+X_output = EfficientPseudoGibbs(X,X_init,n_trees=30)
 
 #%%
 X_stack = np.stack(X_output, axis=0)

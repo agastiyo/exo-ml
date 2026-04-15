@@ -87,7 +87,7 @@ def MNAR_mask(X_known, prop_missing):
 # Define the total runs
 n_tot = 10
 # Define the missing proportions you want to test
-props_missing = np.arange(0.1, 1, 0.1)
+props_missing = np.arange(0.1, 0.7, 0.1)
 # Define the number of runs for stochastic imputation methods
 n_runs = 35
 
@@ -160,7 +160,7 @@ for j in range(n_tot):
     print("KNN done")
 
     # MissForest (RF IterativeImputer)
-    rf = RandomForestRegressor(n_estimators=30, random_state=0)
+    rf = RandomForestRegressor(n_estimators=30, max_depth=10, random_state=0)
     rf_imputer = IterativeImputer(estimator=rf, max_iter=10, random_state=0)
     X_mf = rf_imputer.fit_transform(X_masked)
     print("MissForest done")
