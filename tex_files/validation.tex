@@ -2,70 +2,64 @@
 
 \begin{document}
 
-\title{Validation of SWRF-Impute: MCAR, MAR, and MNAR Testing}
+\title{Validation of SWRF-Impute: MCAR, MAR, MNAR, and Realistic Stellar Host Testing}
 \author{Agastya Gaur}
 \noaffiliation
 
 \section{Introduction}
 
-Validation of an imputation algorithm is essential to assess its ability to reconstruct missing values accurately while preserving statistical properties of the dataset. The reliability of imputation depends critically on the missing data mechanism. This document presents validation methodology and completed results for the SWRF-Impute imputation algorithm under three distinct missing data mechanisms: Missing Completely At Random (MCAR), Missing At Random (MAR), and Missing Not At Random (MNAR).
+Validation of an imputation algorithm is essential to assess its ability to reconstruct missing values accurately while preserving statistical properties of the dataset. The reliability of imputation depends critically on the missing data mechanism. This document presents validation methodology and completed results for the SWRF-Impute imputation algorithm under four distinct missing data mechanisms: Missing Completely At Random (MCAR), Missing At Random (MAR), Missing Not At Random (MNAR), and Realistic Stellar Host Missingness (RSHM).
+
+The first three mechanisms (MCAR, MAR, MNAR) are standard benchmarks that characterize the full range of missingness structures in the statistical literature. RSHM is a domain-specific mechanism introduced in this work to simulate the detection-driven selection effects of exoplanet surveys: stars hosting planets that are unlikely to be detected by radial velocity or transit methods are systematically underrepresented in confirmed-host catalogs, producing MNAR-like missingness whose structure is physically motivated rather than arbitrarily constructed.
+
+All validation studies are conducted on a synthetic stellar host population generated to match the distributional properties of real exoplanet host stars while providing fully observed ground truth. This design enables rigorous evaluation of covariance structure recovery under each mechanism, including RSHM, where real data lacks a complete-case reference.
 
 \section{Data and Features}
 
-The validation studies employ exoplanet host star data from the NASA Exoplanet Archive stored in \texttt{data/cleaned/STELLARHOSTS.csv}. The available features in the full dataset are listed in \autoref{tab:data_parameters}.
+The validation studies employ a synthetic stellar host population. The synthetic population is constructed to reflect the distributional properties of real exoplanet host stars while providing a fully observed ground truth matrix with no pre-existing missingness. This allows rigorous evaluation across all four mechanisms (MCAR, MAR, MNAR, RSHM) without the confound of pre-existing real-world missingness in the baseline.
+
+The data matrix is $\mathbf{X} \in \mathbb{R}^{N \times P}$ with $N = 15000$ synthetic stars and $P = 9$ features. The features are listed in \autoref{tab:data_parameters}.
 
 \begin{table}
   \centering
-  \begin{tabular}{ll}
+  \begin{tabular}{lll}
     \hline
-    \textbf{Parameter} & \textbf{Description} \\
+    \textbf{Parameter} & \textbf{Description} & \textbf{Source} \\
     \hline
-    \verb|sy_name| & System Name \\
-    \verb|hostname| & Host Name \\
-    \verb|sy_snum| & Number of Stars \\
-    \verb|sy_pnum| & Number of Planets \\
-    \verb|st_refname| & Stellar Parameter Reference \\
-    \verb|st_spectype| & Spectral Type \\
-    \verb|st_teff| & Stellar Effective Temperature [K] \\
-    \verb|st_rad| & Stellar Radius [Solar Radius] \\
-    \verb|st_mass| & Stellar Mass [Solar mass] \\
-    \verb|st_met| & Stellar Metallicity [dex] \\
-    \verb|st_metratio| & Stellar Metallicity Ratio \\
-    \verb|st_lum| & Stellar Luminosity [log(Solar)] \\
-    \verb|st_logg| & Stellar Surface Gravity [log10(cm/s$^2$)] \\
-    \verb|st_age| & Stellar Age [Gyr] \\
-    \verb|st_dens| & Stellar Density [g/cm$^3$] \\
-    \verb|st_vsin| & Stellar Rotational Velocity [km/s] \\
-    \verb|st_rotp| & Stellar Rotational Period [days] \\
-    \verb|st_radv| & Systemic Radial Velocity [km/s] \\
+    \verb|sy_pnum| & Number of Planets & Poisson draw, metallicity-coupled \\
+    \verb|sy_snum| & Number of Stars in System & Poisson draw \\
+    \verb|st_teff| & Stellar Effective Temperature [K] & Gaia DR3 empirical sample \\
+    \verb|st_rad|  & Stellar Radius [R$_\odot$] & Gaia DR3 empirical sample \\
+    \verb|st_mass| & Stellar Mass [M$_\odot$] & Gaia DR3 empirical sample \\
+    \verb|st_met_FeH| & Stellar Metallicity [Fe/H] [dex] & Gaia DR3, planet-count scaled \\
+    \verb|st_lum|  & Stellar Luminosity [W] & Derived: $4\pi R^2 \sigma T_{\text{eff}}^4$ \\
+    \verb|st_logg| & Stellar Surface Gravity [log$_{10}$(cm/s$^2$)] & Derived: $\log_{10}(g_\odot M/R^2)$ \\
+    \verb|st_age|  & Stellar Age [Gyr] & Gaia DR3 empirical sample \\
     \hline
   \end{tabular}
-  \caption{Data parameters collected from the NASA Exoplanet Archive STELLARHOSTS Table. More information can be found at \url{https://exoplanetarchive.ipac.caltech.edu/docs/API_STELLARHOSTS_columns.html}.}
+  \caption{Features of the synthetic stellar host population used in all validation studies. Stellar parameters are drawn from Gaia DR3 empirical distributions. Luminosity and surface gravity are computed analytically from sampled radius, mass, and temperature. A planet-metallicity coupling is imposed: \texttt{st\_met\_FeH} is increased by 20\% of its absolute value per additional planet, consistent with the known giant-planet--metallicity correlation.}
   \label{tab:data_parameters}
 \end{table}
 
-\subsection{Dynamic Feature Selection}
+\subsection{Synthetic Population Design}
 
-Rather than using a fixed set of features, the analysis uses a dynamic selection mechanism. Dynamic feature selection is controlled via a completeness threshold parameter $\tau$, which determines the maximum allowable missing fraction for a feature to be included in the analysis. The data matrix $\mathbf{X} \in \mathbb{R}^{N \times P}$ is constructed by selecting only features $p$ where the fraction of missing values satisfies:
+The synthetic population is fully observed by construction, providing clean ground truth for all validation experiments. Stellar parameters (temperature, radius, mass, metallicity, age) are drawn independently from Gaia DR3 empirical distributions. Planet count \texttt{sy\_pnum} follows a shifted Poisson distribution ($\lambda = 1.5$, minimum 1), reduced by the number of companion stars to maintain physical plausibility. A planet-metallicity coupling is imposed:
 
 \begin{equation}
-  \text{missing\_fraction}(p) \leq \tau
+  \texttt{st\_met\_FeH} \leftarrow \texttt{st\_met\_FeH} + 0.2 \times |\texttt{st\_met\_FeH}| \times \texttt{sy\_pnum}
 \end{equation}
 
-This flexible approach allows validation studies to be conducted at different completeness levels by adjusting $\tau$, enabling investigation of algorithm robustness across varying data quality scenarios.
+This introduces a structural correlation between \verb|sy_pnum| and \verb|st_met_FeH|, consistent with the well-established giant-planet--metallicity correlation \citep{johnsonGiantPlanetOccurrence2010,gonzalezStellarMetallicityGiant1997}. Luminosity and surface gravity are computed analytically and therefore carry the correlations of their parent parameters (\texttt{st\_rad}, \texttt{st\_mass}, \texttt{st\_teff}) into the covariance structure.
 
-For this paper, we employ $\tau = 0.7$ (70\% completeness threshold), which yields $P=9$ features and $N=583$ complete-case samples where all selected features are fully observed.
+The resulting $15{,}000 \times 9$ matrix provides a rich, physically motivated covariance structure against which imputation methods can be benchmarked.
 
-\subsection{Initializer Matrix}
+\subsection{Physical Bounds}
 
-The complete-case dataset is supplemented with an initializer matrix $\mathbf{X}^{init} \in \mathbb{R}^{M \times P}$ containing draws from empirical prior distributions. For each selected feature, the prior distribution is obtained from:
+SWRF-Impute is initialized via a bounds list: a sequence of $P$ pairs $(l_p,\, u_p)$ that specify the physically meaningful lower and upper limit for each feature. Either bound may be absent.
 
-\begin{enumerate}
-  \item \textbf{Gaia-sourced features}: Empirical distributions from Gaia DR3 astrometric measurements
-  \item \textbf{Archive-only features}: Empirical distributions from observed values in the full STELLARHOSTS dataset
-\end{enumerate}
+Missing values in feature $p$ are initialized from $\mathrm{Uniform}(l_p, u_p)$ when both bounds are present, and from the observed column mean (clamped to any present bound) otherwise. During Gibbs sampling, the truncated-normal draw for each feature is clipped to $(l_p, u_p)$; absent bounds leave the corresponding tail unconstrained.
 
-This dual-source initialization strategy provides informative priors based on external calibrations (Gaia) where available, while leveraging STELLARHOST statistics otherwise. The initializer provides empirical distributions for the SWRF-Impute algorithm's initialization step.
+For the validation studies, bounds will be set to physically motivated ranges for each stellar parameter (e.g.\ positive-only constraints on mass and radius, temperature limits consistent with main-sequence stars). Features for which no meaningful constraint exists are left unbounded.
 
 \section{Evaluation Metrics}
 
@@ -100,8 +94,8 @@ RMSE and eigenvalue distance both evaluate the \emph{point estimate} produced by
 Let $\mathcal{E} = \{\mathbf{X}_{\text{imp}}^{(k)}\}_{k=1}^{K}$ be the ensemble of $K$ imputed matrices produced by a stochastic method. For each cell $(i,j)$ we compute the 25th and 75th percentiles across the ensemble:
 
 \begin{equation}
-  Q_{25}(i,j) = \operatorname{Percentile}_{25}\bigl(\{\mathbf{X}_{\text{imp}}^{(k)}(i,j)\}_{k=1}^{K}\bigr), \quad
-  Q_{75}(i,j) = \operatorname{Percentile}_{75}\bigl(\{\mathbf{X}_{\text{imp}}^{(k)}(i,j)\}_{k=1}^{K}\bigr)
+  Q_{25}(i,j) = \text{Percentile}_{25}\bigl(\{\mathbf{X}_{\text{imp}}^{(k)}(i,j)\}_{k=1}^{K}\bigr), \quad
+  Q_{75}(i,j) = \text{Percentile}_{75}\bigl(\{\mathbf{X}_{\text{imp}}^{(k)}(i,j)\}_{k=1}^{K}\bigr)
 \end{equation}
 
 The IQR coverage on masked entries is then the fraction of ground-truth values that fall inside the cell-wise interquartile range:
@@ -116,17 +110,17 @@ The metric is only defined for stochastic methods. For MICE and MissForest the e
 
 \section{Validation Methodology}
 
-Across all three missing data mechanisms (MCAR, MAR, and MNAR), the validation pipeline is identical except for mask generation.
+Across all four missing data mechanisms (MCAR, MAR, MNAR, and RSHM), the validation pipeline is identical except for mask generation.
 
 \subsection{Initialization}
 
-All tests begin with the same setup. Starting from the set of complete-case samples $\mathbf{X}_{known} \in \mathbb{R}^{N \times P}$ with $\tau=0.7$, we systematically introduce missingness:
+All tests begin with the same setup. Starting from the fully observed synthetic matrix $\mathbf{X} \in \mathbb{R}^{N \times P}$ with $N = 15{,}000$ and $P = 9$, we systematically introduce missingness:
 
 \begin{equation}
   n_{\text{missing}} = \lfloor \text{prop\_missing} \times (N \times P) \rfloor
 \end{equation}
 
-where $\text{prop\_missing}$ ranges from $0.1$ (10\%) to $0.6$ (60\%) in increments of $0.1$. The missingness is applied via mechanism-specific mask generation (see \S\ref{sec:mask-generation} for details on MCAR, MAR, and MNAR mask creation).
+where $\text{prop\_missing}$ ranges from $0.1$ (10\%) to $0.6$ (60\%) in increments of $0.1$. The missingness is applied via mechanism-specific mask generation (see \S\ref{sec:mask-generation} for details on MCAR, MAR, MNAR, and RSHM mask creation). Because the synthetic matrix is fully observed, ground truth is available for every masked entry under every mechanism, including RSHM.
 
 \subsection{Imputation Algorithm Comparison}
 
@@ -155,7 +149,7 @@ All stochastic methods (MICE, MissForest, and SWRF-Impute) are evaluated on a po
 
 All mask generation and stochastic imputation is driven by a single seeded \texttt{numpy.random.Generator} (via \texttt{numpy.random.default\_rng}). A master seed initialises the generator; independent child generators for each (iteration, missingness level) pair are derived by drawing 32-bit integer seeds from the master. This ensures all experiments are fully reproducible while keeping individual mask realisations statistically independent of one another.
 
-The seed thread runs through the entire pipeline. SWRF-Impute's internal random operations---initialisation draws from the prior distribution, Random Forest bootstrap sampling, and truncated-normal draws at each Gibbs step---all accept the child generator directly. MICE and MissForest receive integer seeds derived from the same master generator for each of their $n_{\text{runs}}$ calls.
+The seed thread runs through the entire pipeline. SWRF-Impute's internal random operations---initialization draws (uniform within bounds, or mean fill), Random Forest bootstrap sampling, and truncated-normal draws at each Gibbs step---all accept the child generator directly. MICE and MissForest receive integer seeds derived from the same master generator for each of their $n_{\text{runs}}$ calls.
 
 \subsection{Result Aggregation}
 
@@ -217,6 +211,14 @@ Our version of the algorithm operates as follows:
   \item \textbf{Mask row features}: For the top $\lceil \text{prop\_missing} \times N \rceil$ observations (ranked by extremity), mask all but one randomly selected feature.
   \item \textbf{Fill remaining mask}: If the total number of masked cells is less than $n_{\text{missing}}$, randomly select from the remaining unmasked cells to reach the target proportion.
 \end{enumerate}
+
+\subsection{Realistic Stellar Host Missingness (RSHM)}
+
+\textit{[Placeholder — implementation in progress.]}
+
+RSHM simulates the detection-driven selection effects present in real exoplanet host star catalogs. Stars hosting planets that fall below survey detection thresholds (due to long orbital periods, low planet-to-star radius ratios, or unfavorable stellar noise properties) are systematically underrepresented in confirmed-host samples. This produces MNAR-like missingness whose structure is physically motivated by the coupling between stellar parameters (\texttt{st\_teff}, \texttt{st\_mass}, \texttt{st\_met\_FeH}) and planet detectability.
+
+The mechanism will be parameterized by a detection probability function $p_{\text{detect}}(i)$ that depends on each star's stellar properties and planet count, with stars assigned to missing status with probability $1 - p_{\text{detect}}(i)$ across multiple features.
 
 \bibliography{references}
 

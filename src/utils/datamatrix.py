@@ -86,3 +86,30 @@ def feature_names(tau=0.7):
       inc_features.append(key)
   
   return inc_features
+
+def synthetic_stellarhosts(n_stars=500, seed=None):
+  rng = np.random.default_rng()
+  if seed:
+    rng = np.random.default_rng(seed=seed)
+  
+  sy_pnum = rng.poisson(1.5, n_stars) + 1 # Poisson distribution of planets (can't have zero planets since this is a stellar host population)
+  sy_snum = rng.poisson(0.1, n_stars) + 1 # Poisson distribution of per system star count (cant have zero stars in the system)
+  
+  sy_pnum = sy_pnum - (sy_snum-1) # Reduce planets if many stars in the system
+  sy_pnum = np.array([1 if i<1 else i for i in sy_pnum]) # Make sure all stars have at least 1 planet
+  
+  st_teff = rng.choice(np.load(f"{gaia_dir}/teff.npy"), n_stars) # Temperatures drawn from Gaia in kelvin
+  st_rad =  rng.choice(np.load(f"{gaia_dir}/radius.npy"), n_stars) # Radius drawn from Gaia in solar radii
+  st_mass = rng.choice(np.load(f"{gaia_dir}/mass.npy"), n_stars) # Mass drawn from Gaia in solar masses
+  
+  st_met_FeH = rng.choice(np.load(f"{gaia_dir}/feh.npy"), n_stars) # Metallicity drawn from Gaia in dex
+  st_met_FeH = st_met_FeH + np.abs(0.2*sy_pnum*st_met_FeH) # Increase by 20% of its absolute value for each planet
+  
+  st_lum = 4*np.pi*((st_rad*696000000)**2)*(5.67e-8)*(st_teff**4) # Luminosity calculated in watts
+  st_logg = np.log10(2.74e4 * (st_mass / (st_rad**2))) # log surface gravity calculated in log_10(cm/s^2)
+  st_age = rng.choice(np.load(f"{gaia_dir}/age.npy"), n_stars) # Age drawn from Gaia in Gyr
+  
+  synth_X = np.array([sy_pnum, sy_snum, st_teff, st_rad, st_mass, st_met_FeH, st_lum, st_logg, st_age])
+  synth_X = synth_X.T
+  
+  return synth_X, ['sy_pnum','sy_snum','st_teff','st_rad','st_mass','st_met_FeH','st_lum','st_logg','st_age']

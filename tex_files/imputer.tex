@@ -28,9 +28,15 @@ The length of these lists are denoted as $|op|$ and $|mp|$. The observed values 
 The matrix $\mathbf{X}_{-p} \in \mathbb{R}^{N\times(P-1)}$ represents the remaining features in the dataset, excluding feature $p$. The rows in this matrix corresponding to the the observed and missing values of feature $p$ are denoted as $\mathbf{X}_{op,-p} \in \mathbb{R}^{|op|\times (P-1)}$ and $\mathbf{X}_{mp,-p} \in \mathbb{R}^{|mp| \times (P-1)}$, respectively.
 
 \subsection{Initialization}
-Each feature $p$ in $\mathbf{X}$ is assumed to have a an empirical distribution derived from external or observed data. Draws from this distribution can be arranged into an initializer matrix $\mathbf{X}^{init} \in \mathbb{R}^{M \times P}$, where $M$ is the number of draws from the prior distribution. In the case that there are different numbers of draws for different features, $M$ takes the value of the maximum number of draws across all features and the rest of the initializer values can be padded with \verb|NaN|.
-
-Missing values in $\mathbf{X}$ are the initialized with a random draw from the corresponding feature's initializer column in $\mathbf{X}^{init}$. This results in a full matrix $\mathbf{X^{(0)}}$, though the indices of the imputed values $mp$ are still tracked for each feature.
+Each feature $p$ may be assigned a user-defined physical interval $(l_p,\, u_p)$, where either bound may be absent. Missing values in $\mathbf{X}$ are initialized as follows. If both bounds are provided, a draw from the uniform distribution is used:
+\begin{equation}
+  x^{(0)}_{i,p} \sim \mathrm{Uniform}(l_p,\, u_p), \quad i \in mp
+\end{equation}
+If one bound or no bounds are provided, missing values are initialized to the observed column mean $\bar{x}_{op,p}$, clamped to any present bound:
+\begin{equation}
+  x^{(0)}_{i,p} = \max(l_p,\, \min(u_p,\, \bar{x}_{op,p})), \quad i \in mp
+\end{equation}
+where absent bounds are treated as $l_p = -\infty$ or $u_p = +\infty$. The resulting matrix $\mathbf{X}^{(0)}$ is fully observed; the indices of imputed values $mp$ are still tracked for each feature.
 
 \subsection{Iteration}
 The initialized matrix $\mathbf{X^{(0)}}$ is the first matrix in a series of a set number $T$ of iterations. Each iteration $t$, SWRF-Impute imputes the missing values for each feature $p$ in the dataset using a Random Forest Regression step and $k$ Stochastic Draw steps. One iteration of the method consists of performing these steps for each feature in the dataset. The steps are described below.
@@ -59,17 +65,11 @@ SWRF-Impute quantifies per-row predictive uncertainty using the \textit{intra-fo
 \end{equation}
 This quantity is non-zero even when the chain has converged, because different bootstrap samples and random feature subsets always produce some tree disagreement. Importantly, $\sigma^{(t,k)}_{p,i}$ is heteroscedastic: rows in sparse or uncertain regions of feature space receive wider draws than well-constrained rows.
 
-In SWRF-Impute, both a lower and upper truncation point is set. The lower bound is defined as the minimum between the minimum observed value of feature $p$ and the minimum initializer value for feature $p$. Similarly, the upper bound is defined as the maximum between the maximum observed value of feature $p$ and the maximum initializer value for feature $p$. Formally,
-\begin{equation}
-  \text{lo}_p = \min(\min(\mathbf{X}_{op,p}), \min(\mathbf{X}^{init}_p))
-\end{equation}
-\begin{equation}
-  \text{hi}_p = \max(\max(\mathbf{X}_{op,p}), \max(\mathbf{X}^{init}_p))
-\end{equation}
+In SWRF-Impute, both a lower and upper truncation point is set. The truncation bounds are the user-defined physical limits $l_p$ and $u_p$. If a bound is absent, the corresponding truncation is removed (i.e.\ $l_p = -\infty$ or $u_p = +\infty$), and the draw degenerates to a half-normal or ordinary normal as appropriate.
 
 The mean of the truncated normal is set to the ensemble mean prediction $\mathbf{x}^{pred,(t,k)}_{mp,p}$. New imputed values are drawn element-wise: for each missing row $i \in mp$,
 \begin{equation}
-  x^{(t,k+1)}_{i,p} \sim \text{TruncNormal}\!\left(x^{pred,(t,k)}_{i,p},\; \beta\,\sigma^{(t,k)}_{p,i},\; \text{lo}_p,\; \text{hi}_p\right)
+  x^{(t,k+1)}_{i,p} \sim \text{TruncNormal}\!\left(x^{pred,(t,k)}_{i,p},\; \beta\,\sigma^{(t,k)}_{p,i},\; l_p,\; u_p\right)
 \end{equation}
 where $\beta$ is a hyperparameter that scales the intra-forest standard deviation, controlling the overall width of the stochastic draws. A higher value of $\beta$ widens the exploration of each missing value's plausible range; a lower value tightens it toward the forest's point prediction.
 
@@ -90,7 +90,7 @@ SWRF-Impute has two main hyperparameters: $\alpha$ and $\beta$. The hyperparamet
 
 The hyperparameter $\beta$ controls the strength of the stochastic step. A higher value of $\beta$ results in more variance in the new imputed values, which can help to escape local minima but may also introduce more noise, hindering convergence and potentially leading to worse imputation performance.
 
-The initializer matrix $\mathbf{X}^{init}$ can also be considered a hyperparameter, as the choice of prior distribution and the number of draws can influence the imputation results. Using a more informative prior distribution can lead to better initial imputations, which may improve the overall performance of SWRF-Impute. If the prior distribution ovecomes any observational bias in the original data, it may allow SWRF-Impute to overcome observational bias as well. However, if the prior distribution is not well-chosen, it may introduce additional bias into the imputation process.
+The bounds list $(l_p,\, u_p)_{p=1}^{P}$ defines the physical constraints for each feature. If both bounds are provided for a feature, they constrain initialization and truncated draws to a physically meaningful range. If a feature is unconstrained (both bounds absent), initialization falls back to the observed column mean and the truncated normal degenerates to an ordinary normal draw. Well-chosen bounds prevent physically impossible imputations (e.g.\ negative stellar mass) and can improve convergence by restricting the chain's support.
 
 \subsection{Convergence}
 Convergence of SWRF-Impute can be assessed by monitoring the change in imputed values across iterations. The approach employed by the algorithm is to calculate the root mean squared difference between the imputed values of the current iteration and the previous iteration. Due to the stochastic updates, convergence should be interpreted as the chain reaching a stationary distribution rather than a fixed point.

@@ -6,11 +6,12 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 from sklearn.ensemble import RandomForestRegressor
-from src.utils.impute import EfficientPseudoGibbs
+from src.utils.impute import EfficientPseudoGibbs_withoutInitializerMatrix
 import src.utils.pca as PCA
 
 METHOD_NAMES       = ["Mean", "Median", "KNN", "MICE", "MissForest", "SWRF-Impute"]
-STOCHASTIC_METHODS = ["MICE", "MissForest", "SWRF-Impute"]
+STOCHASTIC_METHODS = ["MICE", "SWRF-Impute", "MissForest"]   # true posterior samplers — IQR coverage computed
+N_RUNS_MF          = 5                          # MissForest: near-deterministic; small ensemble for stable mean only
 
 def RMSE_masked(X_original, X_imputed, mask):
   scaler = StandardScaler()
@@ -41,7 +42,7 @@ def iqr_coverage(X_true, ensemble, mask):
   within = (X_true[mask] >= q25[mask]) & (X_true[mask] <= q75[mask])
   return float(np.mean(within))
 
-def run_validation(mask_fn, mechanism_name, X_known, X_init,
+def run_validation(mask_fn, mechanism_name, X_known, bounds_list,
                    n_tot=10, props_missing=None, n_runs=35, seed=None):
   """
   Run the full imputation validation harness for a given missingness mechanism.
@@ -54,11 +55,14 @@ def run_validation(mask_fn, mechanism_name, X_known, X_init,
   mask_fn         : callable(X_known, prop_missing, rng) -> (X_masked, mask)
   mechanism_name  : str   e.g. "mcar", "mar", "mnar"
   X_known         : ndarray  complete-case data matrix
-  X_init          : ndarray  initializer matrix for SWRF-Impute
+  bounds_list     : list of P tuples (lo, hi) — physical bounds per feature for
+                    SWRF-Impute; either element may be None (unbounded on that side)
   n_tot           : int   number of outer repetitions
   props_missing   : array-like  missingness proportions to sweep
-  n_runs          : int   draws per missingness level for stochastic methods
-                          (MICE and MissForest; Mean/Median/KNN are deterministic)
+  n_runs          : int   draws per missingness level for MICE and SWRF-Impute
+                          (true posterior samplers). MissForest uses N_RUNS_MF
+                          regardless — it is near-deterministic and only needs a
+                          small ensemble to stabilise the pooled mean.
   seed            : int   base random seed
 
   Returns
@@ -115,7 +119,7 @@ def run_validation(mask_fn, mechanism_name, X_known, X_init,
       # A child rng is derived from the master so the chain is fully reproducible.
 
       swrf_rng = np.random.default_rng(rng.integers(0, 2**31))
-      X_out    = EfficientPseudoGibbs(X_masked, X_init, rng=swrf_rng)
+      X_out    = EfficientPseudoGibbs_withoutInitializerMatrix(X_masked, bounds_list, rng=swrf_rng)
       X_pgi    = np.mean(X_out, axis=0)
       print(f"    SWRF Done")
 
@@ -125,39 +129,39 @@ def run_validation(mask_fn, mechanism_name, X_known, X_init,
       cov_dict["SWRF-Impute"].append(iqr_coverage(X_known, X_out, mask))
 
       # ------------------------------------------------------------------
-      # Stochastic methods — run n_runs times, pool matrices cell-wise, then
-      # evaluate once on the pooled matrix.  This mirrors how SWRF is evaluated
-      # (RMSE of the averaged imputation, not average of per-run RMSEs) and
-      # matches the Rubin's rules multiple-imputation pooling convention.
+      # MissForest — near-deterministic point estimator. Run N_RUNS_MF times
+      # with different seeds only to stabilise the pooled mean; bootstrap
+      # variance is too small for IQR coverage to be meaningful.
 
-      mf_matrices, mice_matrices = [], []
-
-      for _ in range(n_runs):
-        # MissForest: fresh seed each run so the n_runs matrices are not identical
+      mf_matrices = []
+      for k in range(N_RUNS_MF):
         rf_state = int(rng.integers(0, 2**31))
         rf  = RandomForestRegressor(n_estimators=30, max_depth=10, random_state=rf_state)
         X_mf = IterativeImputer(estimator=rf, max_iter=10,
                                 random_state=rf_state).fit_transform(X_masked)
         mf_matrices.append(X_mf)
-        print(f"    MissForest {_+1}/{n_runs}")
+        print(f"    MissForest {k+1}/{N_RUNS_MF}")
 
-        # MICE
-        mice_state = int(rng.integers(0, 2**31))
-        X_mice = IterativeImputer(max_iter=10, random_state=mice_state,
-                                   sample_posterior=True).fit_transform(X_masked)
-        mice_matrices.append(X_mice)
-        print(f"    MICE {_+1}/{n_runs}")
-
-      mf_ensemble    = np.stack(mf_matrices,   axis=0)
-      mice_ensemble  = np.stack(mice_matrices, axis=0)
-      X_mf_pooled    = np.mean(mf_ensemble,   axis=0)
-      X_mice_pooled  = np.mean(mice_ensemble, axis=0)
-
+      X_mf_pooled = np.mean(np.stack(mf_matrices, axis=0), axis=0)
       diff_dict["MissForest"].append(RMSE_masked(X_known, X_mf_pooled, mask))
       eig, _ = PCA.RunPCA(X_mf_pooled)
       eigvals_dict["MissForest"].append(eig_log_l2(eigvals_true, eig))
-      cov_dict["MissForest"].append(iqr_coverage(X_known, mf_ensemble, mask))
+      cov_dict["MissForest"].append(iqr_coverage(X_known, X_mf_pooled, mask))
 
+      # ------------------------------------------------------------------
+      # MICE — true posterior sampler. Run n_runs times; pool cell-wise for
+      # RMSE and eigval; full ensemble for IQR coverage.
+
+      mice_matrices = []
+      for k in range(n_runs):
+        mice_state = int(rng.integers(0, 2**31))
+        X_mice = IterativeImputer(max_iter=10, random_state=mice_state,
+                                  sample_posterior=True).fit_transform(X_masked)
+        mice_matrices.append(X_mice)
+        print(f"    MICE {k+1}/{n_runs}")
+
+      mice_ensemble = np.stack(mice_matrices, axis=0)
+      X_mice_pooled = np.mean(mice_ensemble, axis=0)
       diff_dict["MICE"].append(RMSE_masked(X_known, X_mice_pooled, mask))
       eig, _ = PCA.RunPCA(X_mice_pooled)
       eigvals_dict["MICE"].append(eig_log_l2(eigvals_true, eig))

@@ -7,7 +7,7 @@ def RunPCA(X):
   
   C = (1 / (X_standard.shape[0] - 1)) * (X_standard.T @ X_standard)
   
-  eigvals, eigvecs = np.linalg.eig(C)
+  eigvals, eigvecs = np.linalg.eigh(C)
   
   sorted_indices = np.argsort(eigvals)[::-1]
   eigvals = eigvals[sorted_indices]
