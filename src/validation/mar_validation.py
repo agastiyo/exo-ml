@@ -13,8 +13,8 @@ warnings.filterwarnings("ignore")
 # X_known = X[np.isfinite(X).all(axis=1)]  # Complete-case from real STELLARHOSTS data
 # print(f"Complete-case shape: {X_known.shape}")
 
-# Use synthetic stellar host population (fully observed, N=15000, P=9)
-X_known, feature_names = DMatrix.synthetic_stellarhosts(n_stars=15000)
+# Use synthetic stellar host population (fully observed, N=500, P=9)
+X_known, feature_names = DMatrix.synthetic_stellarhosts(n_stars=500)
 print(f"Synthetic population shape: {X_known.shape}")
 print(f"Features: {feature_names}")
 
@@ -34,44 +34,46 @@ bounds_list = [
 
 #%%
 def MAR_mask(X_known, prop_missing, rng):
+  """
+  Extremity-weighted MAR: a random observed feature is the trigger. Non-trigger
+  cells are sampled without replacement with row probability proportional to the
+  trigger feature's |z-score|, so more extreme rows are more likely to be masked
+  but less extreme rows are not excluded. Exact prop_missing is preserved.
+  """
   N, P = X_known.shape
   n_cells_target = int(np.floor(prop_missing * N * P))
 
-  # Randomly select a trigger feature
   trigger_idx = rng.integers(0, P)
-
-  # Rank observations by extremity of the trigger feature
   trigger = X_known[:, trigger_idx]
   z_scores = (trigger - np.nanmean(trigger)) / (np.nanstd(trigger) + 1e-10)
-  extremity_order = np.argsort(-np.abs(z_scores))  # descending
+  row_weights = np.abs(z_scores)
+  row_weights = row_weights / row_weights.sum()
+
+  # Build flat index of all eligible (non-trigger) cells with per-cell weights
+  eligible_rows, eligible_cols, cell_weights = [], [], []
+  for col in range(P):
+    if col == trigger_idx:
+      continue
+    eligible_rows.extend(range(N))
+    eligible_cols.extend([col] * N)
+    cell_weights.extend(row_weights.tolist())
+
+  eligible_rows = np.array(eligible_rows)
+  eligible_cols = np.array(eligible_cols)
+  cell_weights  = np.array(cell_weights)
+  cell_weights /= cell_weights.sum()
+
+  n_to_mask = min(n_cells_target, len(eligible_rows))
+  chosen = rng.choice(len(eligible_rows), size=n_to_mask, replace=False, p=cell_weights)
 
   mask = np.zeros((N, P), dtype=bool)
-
-  # Mask all non-trigger columns in the most extreme rows.
-  n_rows_to_mask = int(np.ceil(prop_missing * N))
-  masked_count = 0
-
-  for i in range(n_rows_to_mask):
-    row_idx = extremity_order[i]
-    for col_idx in range(P):
-      if col_idx != trigger_idx:
-        mask[row_idx, col_idx] = True
-        masked_count += 1
-
-  # Top up to the target cell count with uniform random cells if needed
-  if masked_count < n_cells_target:
-    remaining = n_cells_target - masked_count
-    unmasked  = np.where(~mask)
-    n_avail   = len(unmasked[0])
-    if n_avail > 0:
-      chosen = rng.choice(n_avail, size=min(remaining, n_avail), replace=False)
-      mask[unmasked[0][chosen], unmasked[1][chosen]] = True
+  mask[eligible_rows[chosen], eligible_cols[chosen]] = True
 
   X_masked = X_known.copy()
   X_masked[mask] = np.nan
   return X_masked, mask
 
 #%%
-run_validation(MAR_mask, "mar", X_known, bounds_list, n_tot=1, n_runs=5)
+run_validation(MAR_mask, "mar", X_known, bounds_list, n_tot=1, n_runs=35)
 
 # %%

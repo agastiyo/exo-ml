@@ -13,8 +13,8 @@ warnings.filterwarnings("ignore")
 # X_known = X[np.isfinite(X).all(axis=1)]  # Complete-case from real STELLARHOSTS data
 # print(f"Complete-case shape: {X_known.shape}")
 
-# Use synthetic stellar host population (fully observed, N=15000, P=9)
-X_known, feature_names = DMatrix.synthetic_stellarhosts(n_stars=15000)
+# Use synthetic stellar host population (fully observed, N=500, P=9)
+X_known, feature_names = DMatrix.synthetic_stellarhosts(n_stars=500)
 print(f"Synthetic population shape: {X_known.shape}")
 print(f"Features: {feature_names}")
 
@@ -35,49 +35,47 @@ bounds_list = [
 #%%
 def MNAR_mask(X_known, prop_missing, rng):
   """
-  Missing Based on Unobserved Variables (MBUV).
-
-  An unobserved feature drawn from a standard normal determines which rows
-  are most extreme. In those rows all-but-one column is masked, creating
-  missingness that depends on an unseen latent variable (true MNAR).
+  Stochastic tail MNAR: each cell is assigned a missing probability based on
+  its z-score magnitude in its feature. Cells are then sampled stochastically
+  to reach prop_missing * N * P total missing cells. Missingness depends on
+  the feature's own value — physically motivated for astrophysical data where
+  extreme measurements are harder to record.
   """
   N, P = X_known.shape
-  n_target = int(prop_missing * N * P)
-
-  # Unobserved latent variable
-  f_unobserved  = rng.standard_normal(N)
-  extremity_idx = np.argsort(-np.abs(f_unobserved))  # most extreme first
-
   mask = np.zeros((N, P), dtype=bool)
 
-  # Mask all columns except one random survivor in each extreme row.
-  # Scale the number of affected rows with N so coverage is consistent
-  # across different missingness levels.
-  n_rows_to_mask = int(np.ceil(prop_missing * N))
+  # Compute |z-scores| per feature
+  z_abs = np.zeros((N, P))
+  for j in range(P):
+    col = X_known[:, j]
+    z = (col - np.nanmean(col)) / (np.nanstd(col) + 1e-10)
+    z_abs[:, j] = np.abs(z)
 
-  for row_idx in extremity_idx[:n_rows_to_mask]:
-    keep_col = rng.integers(0, P)
-    for col_idx in range(P):
-      if col_idx != keep_col:
-        mask[row_idx, col_idx] = True
+  # Assign missing probabilities proportional to |z|^2 (quadratic to emphasize extremes)
+  probs = z_abs ** 2
+  probs = probs / np.sum(probs)  # normalize to probability distribution
 
-  # Top up to the exact target without random fill-in that would dilute
-  # the MNAR structure. Instead extend to additional extreme rows.
-  current = np.sum(mask)
-  if current < n_target:
-    remaining = n_target - current
-    unmasked  = np.where(~mask)
-    n_avail   = len(unmasked[0])
-    if n_avail > 0:
-      # Prefer cells in already-affected rows before touching new rows
-      chosen = rng.choice(n_avail, size=min(remaining, n_avail), replace=False)
-      mask[unmasked[0][chosen], unmasked[1][chosen]] = True
+  # Sample which cells to mask, targeting prop_missing fraction of all cells
+  total_cells = N * P
+  n_to_mask = max(1, int(np.round(prop_missing * total_cells)))
+
+  # Draw cells without replacement according to z-score probabilities
+  flat_indices = rng.choice(
+    total_cells,
+    size=n_to_mask,
+    replace=False,
+    p=probs.flatten()
+  )
+
+  # Convert flat indices back to 2D and set mask
+  rows, cols = np.unravel_index(flat_indices, (N, P))
+  mask[rows, cols] = True
 
   X_masked = X_known.copy()
   X_masked[mask] = np.nan
   return X_masked, mask
 
 #%%
-run_validation(MNAR_mask, "mnar", X_known, bounds_list, n_tot=1, n_runs=5)
+run_validation(MNAR_mask, "mnar", X_known, bounds_list, n_tot=1, n_runs=35)
 
 # %%

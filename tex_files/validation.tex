@@ -18,7 +18,7 @@ All validation studies are conducted on a synthetic stellar host population gene
 
 The validation studies employ a synthetic stellar host population. The synthetic population is constructed to reflect the distributional properties of real exoplanet host stars while providing a fully observed ground truth matrix with no pre-existing missingness. This allows rigorous evaluation across all four mechanisms (MCAR, MAR, MNAR, RSHM) without the confound of pre-existing real-world missingness in the baseline.
 
-The data matrix is $\mathbf{X} \in \mathbb{R}^{N \times P}$ with $N = 15000$ synthetic stars and $P = 9$ features. The features are listed in \autoref{tab:data_parameters}.
+The data matrix is $\mathbf{X} \in \mathbb{R}^{N \times P}$ with $N = 500$ synthetic stars and $P = 9$ features. The features are listed in \autoref{tab:data_parameters}.
 
 \begin{table}
   \centering
@@ -187,30 +187,28 @@ In MCAR data, missing data is completely random. To simulate this for each missi
 
 \subsection{MAR}
 
-In MAR data, the probability that a value is missing depends on observed variables. We generate MAR missingness by selecting a random feature as a trigger variable and masking features across rows conditioned on extreme values in that trigger. This creates realistic patterns where missingness depends on observable, but extreme, values. This method is loosely based on the MAR generation method used by \citet{toyeBenchmarkingMissingData2025}.
+In MAR data, the probability that a value is missing depends on observed variables. We generate MAR missingness by selecting a random feature as a trigger variable and sampling cells to mask from all non-trigger columns with row probability proportional to the extremity of the trigger feature. Unlike a hard row cutoff, this produces a smooth gradient: the most extreme observations are the most likely to contribute missing values, but no observation is categorically excluded. This method is loosely based on the MAR generation method used by \citet{toyeBenchmarkingMissingData2025}.
 
 \begin{enumerate}
-  \item \textbf{Select trigger feature}: Randomly choose one feature $f_{\text{trigger}}$ from the $P$ available features
-  \item \textbf{Standardize trigger feature}: Compute z-scores for all observations in the trigger feature: $z_i = \frac{f_{\text{trigger},i} - \mu}{\sigma}$ for $i = 1, \ldots, N$
-  \item \textbf{Rank by extremity}: Sort observations by the absolute value of z-score $|z_i|$ in descending order (most extreme values first)
-  \item \textbf{Mask row features}: For the top $\lceil \text{prop\_missing} \times N \rceil$ observations (ranked by extremity), mask all features except the trigger feature $f_{\text{trigger}}$. This ensures observations with extreme trigger values lose information across multiple features but retain the trigger itself.
-  \item \textbf{Fill remaining mask}: If the total number of masked cells is less than $n_{\text{missing}}$, randomly select from remaining unmasked cells until the target proportion is reached.
+  \item \textbf{Select trigger feature}: Randomly choose one feature index $f_{\text{trigger}} \in \{1, \ldots, P\}$.
+  \item \textbf{Compute row weights}: Standardize the trigger column to z-scores $z_i = (x_{i,f_{\text{trigger}}} - \mu) / \sigma$ and set row weight $w_i = |z_i|$. Normalize so that $\sum_i w_i = 1$.
+  \item \textbf{Build eligible cell set}: Let $\mathcal{C} = \{(i, j) : j \neq f_{\text{trigger}},\; i = 1, \ldots, N\}$ be all non-trigger cells. Assign each cell $(i, j) \in \mathcal{C}$ the weight $w_i$ (row weight, shared across all non-trigger columns in that row), then renormalize over all cells.
+  \item \textbf{Sample without replacement}: Draw exactly $n_{\text{missing}} = \lfloor \text{prop\_missing} \times N \times P \rfloor$ cells from $\mathcal{C}$ without replacement according to the cell weights and set them to NaN.
 \end{enumerate}
 
-This mechanism creates MAR patterns where missingness is ignorable given the observed trigger feature. Observations with extreme trigger values (high $|z|$) experience widespread missingness in other features, but the trigger feature remains fully observed.
+The trigger column remains fully observed. All other columns participate in missingness with per-row probability proportional to $|z_i|$, so the mechanism is ignorable (MAR) given the trigger: an imputer with access to the trigger can in principle model the selection process.
 
 \subsection{MNAR}
 
-In MNAR data, the probability that a value is missing depends on the unobserved value itself or on hidden confounders. To generate this, we employ a version of the Missing Based on Unobserved Variables (MBUV) strategy introduced by \citet{pereiraImputationDataMissing2024}.
-
-Our version of the algorithm operates as follows:
+In MNAR data, the probability that a value is missing depends on the unobserved value itself. We employ a \emph{stochastic tail masking} strategy: each cell is assigned a missing probability based on its z-score magnitude in its feature, and cells are then sampled stochastically to reach the target proportion. This is physically motivated for astrophysical data---stars with extreme stellar parameters (very high or very low temperature, mass, metallicity, etc.) are precisely the objects for which accurate measurements are hardest to obtain, and therefore most likely to be absent from catalogs.
 
 \begin{enumerate}
-  \item \textbf{Generate unobserved feature}: Generate a standardized unobserved feature $f_{\text{unobserved}}$ following a normal distribution.
-  \item \textbf{Rank by extremity}: Sort observations of $f_{\text{unobserved}}$ by the absolute value of z-score $|z_i|$ in descending order (most extreme values first)
-  \item \textbf{Mask row features}: For the top $\lceil \text{prop\_missing} \times N \rceil$ observations (ranked by extremity), mask all but one randomly selected feature.
-  \item \textbf{Fill remaining mask}: If the total number of masked cells is less than $n_{\text{missing}}$, randomly select from the remaining unmasked cells to reach the target proportion.
+  \item \textbf{Compute per-cell z-scores}: For each feature $j \in \{1, \ldots, P\}$, compute $z_{ij} = (x_{ij} - \mu_j) / \sigma_j$ for all $i$, and take the absolute value: $|z_{ij}|$.
+  \item \textbf{Assign missing probabilities}: For each cell $(i,j)$, assign missing probability $p_{ij} = |z_{ij}|^2 / \sum_{i,j} |z_{ij}|^2$ (normalized over all cells). The quadratic dependence emphasizes extreme values.
+  \item \textbf{Stochastically sample missing cells}: Draw $n_{\text{miss}} = \max\bigl(1,\; \text{round}(\text{prop\_missing} \times N \times P)\bigr)$ cells without replacement according to their probabilities $p_{ij}$. Set these cells to NaN.
 \end{enumerate}
+
+The total number of masked cells is $n_{\text{miss}} \approx \text{prop\_missing} \times N \times P$, matching the global target proportion. Because missingness across all cells is driven by the unobserved values themselves (via the z-score weighting), the mechanism is non-ignorable (MNAR): no subset of the remaining observed data can fully explain which entries are absent. The stochastic sampling ensures that mask generation varies between runs, providing a more realistic and stable evaluation across different random seeds.
 
 \subsection{Realistic Stellar Host Missingness (RSHM)}
 

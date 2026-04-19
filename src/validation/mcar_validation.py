@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore")
 # X_known = X[np.isfinite(X).all(axis=1)]  # Complete-case from real STELLARHOSTS data
 # print(f"Complete-case shape: {X_known.shape}")
 
-# Use synthetic stellar host population (fully observed, N=15000, P=9)
+# Use synthetic stellar host population (fully observed, N=500, P=9)
 X_known, feature_names = DMatrix.synthetic_stellarhosts(n_stars=500)
 print(f"Synthetic population shape: {X_known.shape}")
 print(f"Features: {feature_names}")
