@@ -6,7 +6,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 from sklearn.ensemble import RandomForestRegressor
-from src.utils.impute import EfficientPseudoGibbs_withoutInitializerMatrix
+from src.utils.impute import SWRF_Impute
 import src.utils.pca as PCA
 
 METHOD_NAMES       = ["Mean", "Median", "KNN", "MICE", "MissForest", "SWRF-Impute"]
@@ -119,7 +119,7 @@ def run_validation(mask_fn, mechanism_name, X_known, bounds_list,
       # A child rng is derived from the master so the chain is fully reproducible.
 
       swrf_rng = np.random.default_rng(rng.integers(0, 2**31))
-      X_out    = EfficientPseudoGibbs_withoutInitializerMatrix(X_masked, bounds_list, rng=swrf_rng)
+      X_out    = SWRF_Impute(X_masked, bounds_list, rng=swrf_rng)
       X_pgi    = np.mean(X_out, axis=0)
       print(f"    SWRF Done")
 
@@ -142,11 +142,12 @@ def run_validation(mask_fn, mechanism_name, X_known, bounds_list,
         mf_matrices.append(X_mf)
         print(f"    MissForest {k+1}/{N_RUNS_MF}")
 
-      X_mf_pooled = np.mean(np.stack(mf_matrices, axis=0), axis=0)
+      mf_ensemble = np.stack(mf_matrices, axis=0)
+      X_mf_pooled = np.mean(mf_ensemble, axis=0)
       diff_dict["MissForest"].append(RMSE_masked(X_known, X_mf_pooled, mask))
       eig, _ = PCA.RunPCA(X_mf_pooled)
       eigvals_dict["MissForest"].append(eig_log_l2(eigvals_true, eig))
-      cov_dict["MissForest"].append(iqr_coverage(X_known, X_mf_pooled, mask))
+      cov_dict["MissForest"].append(iqr_coverage(X_known, mf_ensemble, mask))
 
       # ------------------------------------------------------------------
       # MICE — true posterior sampler. Run n_runs times; pool cell-wise for

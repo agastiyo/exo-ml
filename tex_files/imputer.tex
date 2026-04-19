@@ -38,6 +38,8 @@ If one bound or no bounds are provided, missing values are initialized to the ob
 \end{equation}
 where absent bounds are treated as $l_p = -\infty$ or $u_p = +\infty$. The resulting matrix $\mathbf{X}^{(0)}$ is fully observed; the indices of imputed values $mp$ are still tracked for each feature.
 
+Depending on the choice of bounds, the user can allow the algorithm to explore values outside of the observed range in the dataset. This is especially helpful for data affected by significant observational bias.
+
 \subsection{Iteration}
 The initialized matrix $\mathbf{X^{(0)}}$ is the first matrix in a series of a set number $T$ of iterations. Each iteration $t$, SWRF-Impute imputes the missing values for each feature $p$ in the dataset using a Random Forest Regression step and $k$ Stochastic Draw steps. One iteration of the method consists of performing these steps for each feature in the dataset. The steps are described below.
 
