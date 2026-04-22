@@ -1,4 +1,5 @@
-tex_files/output
+paper/archive/
+paper/output/
 data/*
 !data/cleaned
 /output
@@ -6,4 +7,3 @@ __pycache__
 .DS_Store
 .vscode
 .env
-/planning
