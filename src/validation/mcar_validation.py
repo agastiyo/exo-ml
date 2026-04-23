@@ -36,7 +36,7 @@ bounds_list = [
 def MCAR_mask(X_known, prop_missing, rng):
   X_masked = X_known.copy()
   n_total  = X_known.size
-  n_missing = int(prop_missing * n_total)
+  n_missing = np.floor(prop_missing * n_total)
   flat_idx  = rng.choice(n_total, n_missing, replace=False)
   row_idx, col_idx = np.unravel_index(flat_idx, X_known.shape)
   X_masked[row_idx, col_idx] = np.nan

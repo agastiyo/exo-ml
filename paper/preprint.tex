@@ -1,0 +1,388 @@
+\documentclass[preprint,longauthor,twocolumn]{aastex631}
+\usepackage{amsmath}
+
+\begin{document}
+\title{Overcoming Observational Bias for Population-Level PCA of Exoplanet Host Stars}
+\author{Agastya Gaur}
+\affiliation{University of Illinois at Urbana Champaign}
+
+\begin{abstract}
+  abstract
+\end{abstract}
+
+\tableofcontents
+
+\section{Introduction}
+Intro
+
+\section{Related Work}
+
+\section{Data}
+
+\subsection{NASA STELLARHOSTS Dataset}
+
+The Stellarhost data set was obtained from the NASA Exoplanet Archive \textit{STELLARHOSTS} table \citep{nasaexoplanetarchivePlanetarySystemsTable2026}\footnote{Accessed on 2026-02-22 at 11:35:01, returning 47,048 rows.}. The set of parameters extracted for this analysis is summarized in \autoref{tab:data_parameters}. The \textit{STELLARHOSTS} table provides stellar parameters for all systems hosting confirmed exoplanets. For systems comprising multiple gravitationally bound stars, only the parameters for the primary star are included. System parameters are denoted with the \verb|sy_| prefix, while stellar parameters are denoted with the \verb|st_| prefix.
+
+
+\subsubsection{Preprocessing}
+
+Because the table includes a separate row for each reference, a host star with multiple published references can appear in multiple rows. To prepare the data for PCA, a data-cleaning procedure was applied to retain only one representative row per host star. The selection procedure was as follows:
+\begin{enumerate}
+  \item The publication year of each stellar parameter entry was extracted from the \verb|st_refname| field, and a new column, \verb|st_ref_year|, was added to the data set to store this information.
+
+  \item Parameter completeness was computed for each row, defined as the count of non-null values among the following columns: \verb|st_teff|, \verb|st_rad|, \verb|st_mass|, \verb|st_met|, \verb|st_lum|, \verb|st_logg|, \verb|st_age|, \verb|st_dens|, \verb|st_vsin|, \verb|st_rotp|, and \verb|st_radv|.
+
+  \item For each star, the row corresponding to the most recent publication year was retained. In cases of identical or missing publication years, the row with the highest parameter completeness was selected. Remaining ties were resolved by random selection.
+  
+  \item The ratio used in each row of \verb|st_met| was defined in \verb|st_metratio|. Based on this, \verb|st_met| was also split into four separate columns: \verb|st_met_FeH|, which contains the [Fe/H] metallicity value, \verb|st_met_MH|, which contains the [M/H] metallicity value, \verb|st_met_NH|, which contains the [N/H] metallicity value, and \verb|st_met_mH|, which contains the [m/H] metallicity value. The \verb|st_met| column was then dropped from the data set.
+\end{enumerate}
+
+After applying this filtering procedure, the data set was reduced to 5,008 rows, with each row representing a unique host star and its most recent, most complete set of stellar parameters. The resulting cleaned data set was then used for PCA on the selected stellar parameters.
+\begin{table*}
+  \centering
+  \begin{tabular}{ll}
+    \hline
+    \textbf{Parameter} & \textbf{Description} \\
+    \hline
+    \verb|sy_name| & System Name \\
+    \verb|hostname| & Host Name \\
+    \verb|sy_snum| & Number of Stars \\
+    \verb|sy_pnum| & Number of Planets \\
+    \verb|st_refname| & Stellar Parameter Reference \\
+    \verb|st_spectype| & Spectral Type \\
+    \verb|st_teff| & Stellar Effective Temperature [K] \\
+    \verb|st_rad| & Stellar Radius [Solar Radius] \\
+    \verb|st_mass| & Stellar Mass [Solar mass] \\
+    \verb|st_met| & Stellar Metallicity [dex] \\
+    \verb|st_metratio| & Stellar Metallicity Ratio \\
+    \verb|st_lum| & Stellar Luminosity [log(Solar)] \\
+    \verb|st_logg| & Stellar Surface Gravity [log10(cm/s$^2$)] \\
+    \verb|st_age| & Stellar Age [Gyr] \\
+    \verb|st_dens| & Stellar Density [g/cm$^3$] \\
+    \verb|st_vsin| & Stellar Rotational Velocity [km/s] \\
+    \verb|st_rotp| & Stellar Rotational Period [days] \\
+    \verb|st_radv| & Systemic Radial Velocity [km/s] \\
+    \hline
+  \end{tabular}
+  \caption{Data parameters collected from the NASA Exoplanet Archive STELLARHOSTS Table. More information can be found at \url{https://exoplanetarchive.ipac.caltech.edu/docs/API_STELLARHOSTS_columns.html}.}
+  \label{tab:data_parameters}
+\end{table*}
+
+\subsection{Synthetic Stellarhost Population}
+
+The validation studies employ a synthetic stellar host population. The synthetic population is constructed to reflect the distributional properties of real exoplanet host stars while providing a fully observed ground truth matrix with no pre-existing missingness. This allows rigorous evaluation across all four mechanisms (MCAR, MAR, MNAR, RSHM) without the confound of pre-existing real-world missingness in the baseline.
+
+The data matrix is $\mathbf{X} \in \mathbb{R}^{N \times P}$ with $N = 500$ synthetic stars and $P = 9$ features. The features are listed in \autoref{tab:synth_data_parameters}.
+
+\begin{table*}
+  \centering
+  \begin{tabular}{lll}
+    \hline
+    \textbf{Parameter} & \textbf{Description} & \textbf{Source} \\
+    \hline
+    \verb|sy_pnum| & Number of Planets & Poisson draw, metallicity-coupled \\
+    \verb|sy_snum| & Number of Stars in System & Poisson draw \\
+    \verb|st_teff| & Stellar Effective Temperature [K] & Gaia DR3 empirical sample \\
+    \verb|st_rad|  & Stellar Radius [R$_\odot$] & Gaia DR3 empirical sample \\
+    \verb|st_mass| & Stellar Mass [M$_\odot$] & Gaia DR3 empirical sample \\
+    \verb|st_met_FeH| & Stellar Metallicity [Fe/H] [dex] & Gaia DR3, planet-count scaled \\
+    \verb|st_lum|  & Stellar Luminosity [W] & Derived: $4\pi R^2 \sigma T_{\text{eff}}^4$ \\
+    \verb|st_logg| & Stellar Surface Gravity [log$_{10}$(cm/s$^2$)] & Derived: $\log_{10}(g_\odot M/R^2)$ \\
+    \verb|st_age|  & Stellar Age [Gyr] & Gaia DR3 empirical sample \\
+    \hline
+  \end{tabular}
+  \caption{Features of the synthetic stellar host population used in all validation studies. Stellar parameters are drawn from Gaia DR3 empirical distributions. Luminosity and surface gravity are computed analytically from sampled radius, mass, and temperature. A planet-metallicity coupling is imposed: \texttt{st\_met\_FeH} is increased by 20\% of its absolute value per additional planet, consistent with the known giant-planet--metallicity correlation.}
+  \label{tab:synth_data_parameters}
+\end{table*}
+
+\subsubsection{Synthetic Population Design}
+
+The synthetic population is fully observed by construction, providing clean ground truth for all validation experiments. Stellar parameters (temperature, radius, mass, metallicity, age) are drawn independently from Gaia DR3 empirical distributions. Planet count \verb|sy_pnum| follows a shifted Poisson distribution ($\lambda = 1.5$, minimum 1), reduced by the number of companion stars to maintain physical plausibility:
+
+\begin{equation}
+  \verb|sy_pnum| \leftarrow \verb|sy_pnum| - (\verb|sy_snum|-1)
+\end{equation}
+
+A planet-metallicity coupling is also imposed:
+
+\begin{equation}
+  \verb|st_met_FeH| \leftarrow \verb|st_met_FeH| + 0.2\verb|sy_pnum||\verb|st_met_FeH||
+\end{equation}
+
+This introduces a correlation between \verb|sy_pnum| and \verb|st_met_FeH| that is roughly consistent with the well-established giant-planet--metallicity correlation \citep{johnsonGiantPlanetOccurrence2010,gonzalezStellarMetallicityGiant1997}.
+
+Luminosity and surface gravity are computed analytically and therefore carry the correlations of their parent parameters (\texttt{st\_rad}, \texttt{st\_mass}, \texttt{st\_teff}) into the covariance structure.
+
+The resulting $500 \times 9$ matrix provides a rich, physically motivated covariance structure against which imputation methods can be benchmarked.
+
+\section{Methodology}
+
+\subsection{PCA}
+
+Principal component analysis (PCA) is a dimensionality reduction technique that transforms a set of correlated variables into a smaller number of uncorrelated variables called principal components. For the purposes of this project, PCA was applied as an exploratory tool to identify underlying patterns and relationships among the stellar parameters in the dataset. By analyzing the loadings of each principal component, insights can be gained into which parameters contribute most strongly to the variance in the data, potentially revealing clusters of similar host stars or correlations between certain stellar properties.
+
+To perform PCA, a dataset of $n$ items with $p$ features must be represented as a matrix $\mathbf{X} \in \mathbb{R}^{n \times p}$. The columns of $\mathbf{X}$ are then standardized and the covariance matrix $\mathbf{C}$ of the data can be computed:
+\begin{equation}
+  \mathbf{C} = \frac{1}{n-1} \mathbf{X}^T \mathbf{X}
+\end{equation}
+The eigenvalues and eigenvectors of $\mathbf{C}$ are then calculated. The eigenvectors define the directions of maximum variance in the data (i.e., the principal component axes), while the corresponding eigenvalues quantify the variance explained by each component. Analyzing the loadings of each component reveals which original features contribute most strongly to the captured variance, thereby offering insight into the underlying structure of the data.
+
+From the \textit{STELLARHOSTS} table, categorical parameters \verb|sy_name|, \verb|hostname|, \verb|st_refname|, \verb|st_spectype|, and \verb|st_metratio| were excluded from the PCA. The issue arose in choosing which of the remaining numerical parameters to include in the analysis, as some parameters had a high proportion of missing values. \autoref{tab:nan_distribution} shows the distribution of missing values across the numerical parameters, sorted by increasing proportion of NaN values. A number of solutions were considered to address the missing data.
+\begin{table*}
+  \centering
+  \begin{tabular}{lrr}
+    \hline
+    \textbf{Parameter} & \textbf{\# NaN} & \textbf{\% NaN} \\
+    \hline
+    \verb|sy_pnum| & 0 & 0.00\% \\
+    \verb|sy_snum| & 0 & 0.00\% \\
+    \verb|st_teff| & 999 & 19.95\% \\
+    \verb|st_rad| & 1040 & 20.77\% \\
+    \verb|st_mass| & 1337 & 26.70\% \\
+    \verb|st_met_FeH| & 2395 & 47.82\% \\
+    \verb|st_logg| & 2793 & 55.77\% \\
+    \verb|st_age| & 2951 & 58.93\% \\
+    \verb|st_dens| & 3338 & 66.65\% \\
+    \verb|st_lum| & 3942 & 78.71\% \\
+    \verb|st_vsin| & 4088 & 81.63\% \\
+    \verb|st_radv| & 4590 & 91.65\% \\
+    \verb|st_rotp| & 4619 & 92.23\% \\
+    \verb|st_met_MH| & 4954 & 98.92\% \\
+    \verb|st_met_mH| & 4996 & 99.76\% \\
+    \verb|st_met_NH| & 5003 & 99.90\% \\
+    \hline
+  \end{tabular}
+  \caption{Distribution of missing values (NaN counts and percentages) across numerical parameters in the cleaned dataset. Parameters are sorted by increasing proportion of missing values.}
+  \label{tab:nan_distribution}
+\end{table*}
+
+\subsubsection{Complete-Case PCA}
+Given the high proportion of missing values in many of the numerical parameters, a complete case PCA approach was adopted to perform an initial, exploratory analysis. This method involved selecting a subset of the data that contained complete cases for a chosen set of parameters, allowing a trial run of PCA for initial results to be performed without the need for imputation. A NaN limit $\tau$ was defined, and only parameters with a proportion of missing values less than $\tau$ were included in the PCA.
+
+\subsubsection{Imputed PCA}
+
+\subsection{SWRF-Impute}
+
+A dataset of $N$ samples and $P$ features can be represented as the data matrix $\mathbf{X} \in \mathbb{R}^{N \times P}$. $\mathbf{X}$ may contain a number of missing values, represented as \verb|NaN|.
+
+The column $\mathbf{x}_p \in \mathbb{R}^N$ represents feature $p$. Each feature $p$ has observed values $op$ and missing $mp$ defined as
+\begin{equation}
+  op = \{i \in \{1,\dots,N\} : \mathbf{X}_{i,p} \text{ observed} \}
+\end{equation}
+\begin{equation}
+  mp = \{i \in \{1,\dots,N\} : \mathbf{X}_{i,p} \text{ missing} \}
+\end{equation}
+The length of these lists are denoted as $|op|$ and $|mp|$. The observed values of feature $p$ are represented as $\mathbf{x}_{op,p} \in \mathbb{R}^{|op|}$, while the missing values are represented as $\mathbf{x}_{mp,p} \in \mathbb{R}^{|mp|}$.
+
+The matrix $\mathbf{X}_{-p} \in \mathbb{R}^{N\times(P-1)}$ represents the remaining features in the dataset, excluding feature $p$. The rows in this matrix corresponding to the the observed and missing values of feature $p$ are denoted as $\mathbf{X}_{op,-p} \in \mathbb{R}^{|op|\times (P-1)}$ and $\mathbf{X}_{mp,-p} \in \mathbb{R}^{|mp| \times (P-1)}$, respectively.
+
+\subsubsection{Initialization}
+Each feature $p$ may be assigned a user-defined physical interval $(l_p,\, u_p)$, where either bound may be absent. Missing values in $\mathbf{X}$ are initialized as follows. If both bounds are provided, a draw from the uniform distribution is used:
+\begin{equation}
+  x^{(0)}_{i,p} \sim \mathrm{Uniform}(l_p,\, u_p), \quad i \in mp
+\end{equation}
+If one bound or no bounds are provided, missing values are initialized to the observed column mean $\bar{x}_{op,p}$, clamped to any present bound:
+\begin{equation}
+  x^{(0)}_{i,p} = \max(l_p,\, \min(u_p,\, \bar{x}_{op,p})), \quad i \in mp
+\end{equation}
+where absent bounds are treated as $l_p = -\infty$ or $u_p = +\infty$. The resulting matrix $\mathbf{X}^{(0)}$ is fully observed; the indices of imputed values $mp$ are still tracked for each feature.
+
+Depending on the choice of bounds, the user can allow the algorithm to explore values outside of the observed range in the dataset. This is especially helpful for data affected by significant observational bias.
+
+\subsubsection{Iteration}
+The initialized matrix $\mathbf{X^{(0)}}$ is the first matrix in a series of a set number $T$ of iterations. Each iteration $t$, SWRF-Impute imputes the missing values for each feature $p$ in the dataset using a Random Forest Regression step and $k$ Stochastic Draw steps. One iteration of the method consists of performing these steps for each feature in the dataset. The steps are described below.
+
+\subsubsection{Random Forest Regression}
+Similar to MissForest \citep{stekhovenMissForestnonparametricMissingValue2012}, a random forest regression model can be trained to predict $\mathbf{x}^{(t+1)}_{mp,p}$ given the initialized matrix. The model is trained on the observed values $\mathbf{x}_{op,p}$ as the target variable and the corresponding rows of the other features $\mathbf{X}^{(t)}_{op,-p}$ as the predictor variables. The biggest divergence between MissForest and SWRF-Impute is that the latter incorporates a weighting scheme to improve the accuracy of the imputation. Each row of the predictor variables $\mathbf{X}^{(t)}_{op,-p}$ is assigned a weight based on the proportion of missing values in the row. Explicitly, the weight for row $i$ is calculated as
+\begin{equation}
+  w_i = \left(\frac{\sum_{j \neq p} \mathbf{1}_{\{\mathbf{X}_{i,j} \text{ observed}\}}}{P-1}\right)^\alpha
+\end{equation}
+where $\alpha$ is a hyperparameter that controls the influence of the weighting scheme. A higher value of $\alpha$ gives more weight to more complete rows. With this weighting scheme, the Random Forest reduces bias introduced by previously imputed values by downweighting rows with high imputation uncertainty. The weights do not change across iterations.
+
+Given the target and predictor variables, along with the weights, a random forest regression model $\hat{f}^{(t)}_p : \mathbb{R}^{P-1} \rightarrow \mathbb{R}$ can be trained. Formally, for each iteration $t$,
+\begin{equation}
+  \hat{f}^{(t)}_p = \text{RF}\left(\mathbf{X}^{(t)}_{op,-p}, \mathbf{x}^{(t)}_{op,p},w\right)
+\end{equation}
+
+\subsubsection{Stochastic Step}
+Given a trained random forest $\hat{f}^{(t)}_p$ for every feature $p$, the stochastic step is repeated $K$ times. Starting with the data matrix outputted at the end of the previous iteration, the trained random forest is applied row-wise to predict new values $\mathbf{x}^{pred}_{mp,p}$.
+\begin{equation}
+  \mathbf{x}^{pred,(t,k)}_{mp,p} = \hat{f}^{(t)}_p(\mathbf{X}^{(t,k)}_{mp,-p})
+\end{equation}
+
+SWRF-Impute quantifies per-row predictive uncertainty using the \textit{intra-forest standard deviation} --- the spread of predictions across the $B$ individual trees that compose $\hat{f}^{(t)}_p$. Denoting the $b$-th tree's prediction as $\hat{f}^{(t)}_{p,b}$, the uncertainty for missing row $i \in mp$ is
+\begin{equation}
+  \sigma^{(t,k)}_{p,i} = \text{Std}_{b=1}^{B}\!\left[\hat{f}^{(t)}_{p,b}\!\left(\mathbf{X}^{(t,k)}_{i,-p}\right)\right]
+\end{equation}
+This quantity is always non-zero since different bootstrap samples and random feature subsets always produce some tree disagreement. Importantly, $\sigma^{(t,k)}_{p,i}$ is heteroscedastic: rows in sparse or uncertain regions of feature space receive wider draws than well-constrained rows.
+
+In SWRF-Impute, both a lower and upper truncation point is set. The truncation bounds are the user-defined physical limits $l_p$ and $u_p$. If a bound is absent, the corresponding truncation is removed (i.e.\ $l_p = -\infty$ or $u_p = +\infty$), and the draw degenerates to a half-normal or ordinary normal as appropriate. Truncated normals are a natural choice to allow for bounded stochasticity, and have been used in similar methods \citep{weiGSimpGibbsSampler2018,wangImprovedGSimpFlexible2023}.
+
+The mean of the truncated normal is set to the ensemble mean prediction $\mathbf{x}^{pred,(t,k)}_{mp,p}$. New imputed values are drawn element-wise: for each missing row $i \in mp$,
+\begin{equation}
+  x^{(t,k+1)}_{i,p} \sim \text{TruncNorm}\!\left(x^{pred,(t,k)}_{i,p},\; \beta\,\sigma^{(t,k)}_{p,i},\; l_p,\; u_p\right)
+\end{equation}
+where $\beta$ is a hyperparameter that scales the intra-forest standard deviation, controlling the overall width of the stochastic draws. A higher value of $\beta$ widens the exploration of each missing value's plausible range; a lower value tightens it toward the forest's point prediction.
+
+The new imputed values for each feature $\mathbf{x}^{(t,k+1)}_{mp,p}$ are combined with the original data matrix $\mathbf{X}$ to create $\mathbf{X}^{(t,k+1)}$. The random forest $\hat{f}^{(t)}_p$ is applied the new data matrix, and the drawing process is repeated.
+
+\subsubsection{Output}
+Finally, after $K$ draws are completed, the full iteration including the Random Forests and stochastic steps comes to an end. The data matrix $\mathbf{X}^{(t+1)}$ to train the next random forest is defined as
+\begin{equation}
+  \mathbf{X}^{(t+1)} = \mathbf{X}^{(t,K)}
+\end{equation}
+
+One iteration of SWRF-Impute consists of performing the random forest regression and $K$ stochastic steps for each feature in the dataset. The process is repeated until a set number of iteration is reached. The sequence $\{\mathbf{X}^{(t)}\}$ then forms a Markov chain over the space of completed datasets.
+
+Snapshots of the data matrix are taken after every stochastic step to create a Markov chain of possible datasets. The final imputed dataset can be obtained by averaging the imputed values the sequence, and probability distributions can be obtained for each missing value as well. In this way, SWRF-Impute not only calculates an imputed dataset, but also quantifies uncertainty for each missing value.
+
+\subsubsection{Hyperparameters}
+SWRF-Impute has two main hyperparameters: $\alpha$ and $\beta$. The hyperparameter $\alpha$ controls the influence of the weighting scheme in the random forest regression. A higher value of $\alpha$ gives more weight to more complete rows, causing the regressor to stick more closely to the observed data, reducing the influence of possible noise from rows with mostly imputed values, but may also reduce the ability of the model to potentially overcome observational bias.
+
+The hyperparameter $\beta$ controls the strength of the stochastic step. A higher value of $\beta$ results in more variance in the new imputed values, which can help to escape local minima but may also introduce more noise, hindering convergence and potentially leading to worse imputation performance.
+
+The bounds list $(l_p,\, u_p)_{p=1}^{P}$ defines the physical constraints for each feature. If both bounds are provided for a feature, they constrain initialization and truncated draws to a physically meaningful range. If a feature is unconstrained (both bounds absent), initialization falls back to the observed column mean and the truncated normal degenerates to an ordinary normal draw. Well-chosen bounds prevent physically impossible imputations (e.g.\ negative stellar mass) and allow the algorithm to explore outside the observed bounds of MNAR data.
+
+\section{Validation}
+
+\subsection{Metrics}
+
+\subsection{Mask Generation}
+
+Each mask generation method took an $N \times P$ matrix and created a boolean mask with a $p_{miss}$ proportion of the values masked in accordance with its missigness mechanism.
+
+\subsubsection{MCAR}
+
+In MCAR data, missing data is completely random. To simulate this for each missingness level, a single random mask is generated for each full test. The mask is created by:
+
+\begin{enumerate}
+  \item Flattening the complete data matrix to a vector of length $N \times P$
+  \item Randomly sampling $n_{\text{missing}} = \lfloor p_{miss} \times N \times P \rfloor$ indices without replacement
+  \item Converting indices back to (row, column) pairs via $\text{unravel\_index}()$
+  \item Setting masked entries to NaN to create $\mathbf{X}_{\text{masked}}^{\text{MCAR}}$
+\end{enumerate}
+
+\subsubsection{MAR}
+
+In MAR data, the probability that a value is missing depends on observed variables. We generate MAR missingness by selecting a random feature as a trigger variable and sampling cells to mask from all non-trigger columns with row probability proportional to the extremity of the trigger feature. Unlike a hard row cutoff, this produces a smooth gradient: the most extreme observations are the most likely to contribute missing values, but no observation is categorically excluded. This method is loosely based on the MAR generation method used by \citet{toyeBenchmarkingMissingData2025}.
+
+\begin{enumerate}
+  \item \textbf{Select trigger feature}: Randomly choose one feature index $f_{\text{trigger}} \in \{1, \ldots, P\}$.
+  \item \textbf{Compute row weights}: Standardize the trigger column to z-scores $z_i = (x_{i,f_{\text{trigger}}} - \mu) / \sigma$ and set row weight $w_i = |z_i|$. Normalize so that $\sum_i w_i = 1$.
+  \item \textbf{Build eligible cell set}: Let $\mathcal{C} = \{(i, j) : j \neq f_{\text{trigger}},\; i = 1, \ldots, N\}$ be all non-trigger cells. Assign each cell $(i, j) \in \mathcal{C}$ the weight $w_i$ (row weight, shared across all non-trigger columns in that row), then renormalize over all cells.
+  \item \textbf{Sample without replacement}: Draw exactly $n_{\text{missing}} = \lfloor p_{miss}  \times N \times P \rfloor$ cells from $\mathcal{C}$ without replacement according to the cell weights and set them to NaN.
+\end{enumerate}
+
+The trigger column remains fully observed. All other columns participate in missingness with per-row probability proportional to $|z_i|$, so the mechanism is ignorable (MAR) given the trigger: an imputer with access to the trigger can in principle model the selection process.
+
+\subsubsection{MNAR}
+
+In MNAR data, the probability that a value is missing depends on the unobserved value itself. We employ a \emph{stochastic tail masking} strategy: each cell is assigned a missing probability based on its z-score magnitude in its feature, and cells are then sampled stochastically to reach the target proportion. This is physically motivated for astrophysical data---stars with extreme stellar parameters (very high or very low temperature, mass, metallicity, etc.) are precisely the objects for which accurate measurements are hardest to obtain, and therefore most likely to be absent from catalogs.
+
+\begin{enumerate}
+  \item \textbf{Compute per-cell z-scores}: For each feature $j \in \{1, \ldots, P\}$, compute $z_{ij} = (x_{ij} - \mu_j) / \sigma_j$ for all $i$, and take the absolute value: $|z_{ij}|$.
+  \item \textbf{Assign missing probabilities}: For each cell $(i,j)$, assign missing probability $p_{ij} = |z_{ij}|^2 / \sum_{i,j} |z_{ij}|^2$ (normalized over all cells). The quadratic dependence emphasizes extreme values.
+  \item \textbf{Stochastically sample missing cells}: Draw $n_{\text{missing}} = \lfloor p_{miss}  \times N \times P \rfloor$ cells without replacement according to their probabilities $p_{ij}$. Set these cells to NaN.
+\end{enumerate}
+
+The total number of masked cells is $n_{\text{miss}} \approx \text{prop\_missing} \times N \times P$, matching the global target proportion. Because missingness across all cells is driven by the unobserved values themselves (via the z-score weighting), the mechanism is non-ignorable (MNAR): no subset of the remaining observed data can fully explain which entries are absent. The stochastic sampling ensures that mask generation varies between runs, providing a more realistic and stable evaluation across different random seeds.
+
+\subsubsection{RSHM}
+
+RSHM is a domain-specific missingness mechanism introduced in this work. It simulates the detection-driven selection effects that produce MNAR-structured incompleteness in confirmed exoplanet host star catalogs such as the NASA Exoplanet Archive \verb|STELLARHOSTS| table. RSHM operates on the insight is that the act of detecting a planet around a star is itself a biased selection event whose outcome correlates with the very stellar parameters that would subsequently be measured. Missingness in the resulting catalog is therefore non-ignorable: the probability that a stellar parameter is absent depends on the unobserved values of the stellar parameters themselves \citep{hsuOccurrenceRatesPlanets2019}.
+
+The mechanism is operationalized in five sequential steps. Steps 1--3 construct a per-feature missingness probability matrix $\mathbf{P} \in [0,1]^{N \times P}$, where $P_{ij}$ is the probability that feature $j$ of star $i$ is missing. Step 4 uses $\mathbf{P}$ to select which rows represent non-detected stars and removes them entirely. Step 5 draws the residual cell-level missingness for the surviving rows.
+
+\texttt{sy\_pnum} and \texttt{sy\_snum} are fixed at $P_{ij} = 0$ throughout, since by definition these quantities must be known for a star to appear in the host catalog at all. All other features participate in the missingness model.
+
+\subsubsection*{Step 1 --- Survey Selection: Malmquist Bias and Photometric Noise Proxy}
+
+The first step is to filter stars that may not be detected at all. In magnitude-limited surveys such as Kepler, stars fainter than the survey's brightness threshold are systematically underrepresented. When they do appear, they also receive less follow-up characterization \citep{gaidosOBJECTSKEPLERSMIRROR2012}. This is Malmquist bias: it couples the probability of stellar-parameter measurement to the star's luminosity.
+
+A second selection effect operates through photometric noise. The Kepler pipeline detection threshold is set by the combined differential photometric precision ($\sigma_{\mathrm{CDPP}}$) of each target star \citep{howardPLANETOCCURRENCE0252012}. Hotter stars are intrinsically more variable and produce higher $\sigma_{\mathrm{CDPP}}$, which raises the minimum detectable transit depth and lowers the effective detection probability for that star. Because $\sigma_{\mathrm{CDPP}}$ is not available in the synthetic population, stellar effective temperature $T_{\mathrm{eff}}$ is used as its proxy: higher $T_{\mathrm{eff}}$ implies higher photometric noise and lower detection probability.
+
+Both effects act on all features of a row simultaneously. Bias against the detection of a star affects the avaliability of all of its features.
+\begin{equation}
+  P_{ij} \;\leftarrow\; P_{ij}
+    + \alpha_{\mathrm{lum}}\,\bigl(-z_{\mathrm{lum},i}\bigr)
+    + \alpha_{\mathrm{teff}}\,\bigl(z_{\mathrm{teff},i}\bigr),
+  \qquad j \in \mathcal{J}_{\mathrm{maskable}}
+  \label{eq:rshm-step1}
+\end{equation}
+where $z_{\mathrm{lum},i}$ and $z_{\mathrm{teff},i}$ are the signed $z$-scores of star $i$'s luminosity and effective temperature within the synthetic population, and $\alpha_{\mathrm{lum}}$, $\alpha_{\mathrm{teff}} > 0$ are scaling constants. Stars with below-average luminosity or above-average temperature receive an increased missingness probability.
+
+\subsubsection*{Step 2 --- Detection Method: Transit and Radial Velocity Feature Dropout}
+
+Transit and radial velocity (RV) surveys together account for the large majority of confirmed exoplanet detections \citep{mirchandaniDetectionBiasesMethodological2025}. Each method introduces systematic biases in which stellar parameters are subsequently characterized, because follow-up observations are designed around the mode of detection:
+
+\begin{itemize}
+  \item \textbf{Transit hosts} require precise photometry of a bright, geometrically favorable star. Transit depth scales as $\delta \propto (R_p/R_\star)^2$, so small stellar radii produce deeper, more detectable transits. Transit-detected hosts therefore tend to be luminous and small, and their \emph{photometric} parameters ($T_{\mathrm{eff}}$, radius, luminosity, and surface gravity) are typically well-measured \citep{burkeTERRESTRIALPLANETOCCURRENCE2015}.
+
+  \item \textbf{RV hosts} require high-resolution spectroscopy of a bright, spectrally stable star. The planet-metallicity correlation preferentially populates RV target lists with metal-rich stars. RV-detected hosts therefore tend to be luminous and metal-rich, and their \emph{spectroscopic} parameters (metallicity and $T_{\mathrm{eff}}$) are typically well-measured \citep{mirchandaniDetectionBiasesMethodological2025}.
+\end{itemize}
+
+Detection favorability for each method is scored per star using $z$-scores of the relevant driving parameters:
+\begin{align}
+  s_{\mathrm{transit},i} &= z_{\mathrm{lum},i} - z_{\mathrm{rad},i} \label{eq:transit-score} \\
+  s_{\mathrm{RV},i}      &= z_{\mathrm{lum},i} + z_{\mathrm{met},i} \label{eq:rv-score}
+\end{align}
+A positive score indicates a star well-suited to detection by that method. For such stars, the missingness probabilities of the corresponding feature subset are reduced:
+\begin{align}
+  P_{ij} &\leftarrow P_{ij} - \beta_{\mathrm{transit}}s_{\mathrm{transit},i},
+    \quad j \in \mathcal{J}_{\mathrm{phot}} \label{eq:transit-dropout} \\
+  P_{ij} &\leftarrow P_{ij} - \beta_{\mathrm{RV}}s_{\mathrm{RV},i},
+    \quad j \in \mathcal{J}_{\mathrm{spec}} \label{eq:rv-dropout}
+\end{align}
+where $\mathcal{J}_{\mathrm{phot}} = \{\texttt{st\_teff},\, \texttt{st\_rad},\, \texttt{st\_lum},\, \texttt{st\_logg}\}$ and $\mathcal{J}_{\mathrm{spec}} = \{\texttt{st\_met\_FeH},\, \texttt{st\_teff}\}$ are the photometric and spectroscopic feature subsets respectively. Steps 1 and 2 together produce a feature probability matrix whose structure encodes the method-specific characterization fingerprint of each star.
+
+\subsubsection*{Step 3 --- Non-Detection Row Deletion}
+
+Stars that would never be detected or whose planets would never be detected by transit or RV surveys cannot appear in confirmed-host catalogs. To simulate this, the $n_{\mathrm{delete}} = \lfloor p_{\mathrm{miss}} \cdot N \rfloor$ stars with the highest row-mean missingness probability are identified and completely deleted:
+\begin{equation}
+  \bar{P}_i = \frac{1}{|\mathcal{J}_{\mathrm{maskable}}|} \sum_{j \in \mathcal{J}_{\mathrm{maskable}}} P_{ij},
+  \qquad \mathcal{D} = \mathrm{argtop}_{n_{\mathrm{delete}}}(\bar{P})
+  \label{eq:row-deletion}
+\end{equation}
+The deletion leads to this mask generator outputting an $N-n_{\mathrm{delete}} \times P$ matrix. Because of this, RMSE could not be used as a metric for this missingness mechanism.
+
+This step models the physical boundary between stars that are in the confirmed-host catalog (retained rows) and stars that are not (deleted rows) \citep{gaidosOBJECTSKEPLERSMIRROR2012,burkeTERRESTRIALPLANETOCCURRENCE2015}. The coupling of $\bar{P}_i$ to the true values of \texttt{st\_lum}, \texttt{st\_teff}, \texttt{st\_rad}, and \texttt{st\_met\_FeH} makes this deletion non-ignorable (MNAR): the probability of complete non-detection depends on the unobserved stellar properties themselves \citep{hsuOccurrenceRatesPlanets2019}. Unlike the generic MNAR mask, the deletion structure here encodes a physically motivated causal model of how survey detection probability is coupled to stellar parameters \citep{mirchandaniDetectionBiasesMethodological2025}.
+
+\subsubsection*{Step 4 --- Feature-Level Cell Missingness for Retained Rows}
+
+Stars that do appear in the catalog (surviving rows, $i \notin \mathcal{D}$) are still subject to partial missingness: not every stellar parameter is measured for every host.
+
+$\lfloor p_{\mathrm{miss}} \times N-n_{\mathrm{delete}} \times P\Bigr\rfloor$ cells are drawn without replacement from the remaining cells, with sampling probability proportional to $P_{ij}$ for $i \notin \mathcal{D}$, $j \in \mathcal{J}_{\mathrm{maskable}}$. The $P_{ij}$ weights are normalized to a valid probability distribution before sampling. This preserves the feature-level structure from Steps 1--3: within the surviving catalog rows, photometric parameters are less likely to be missing for transit-favorable stars, spectroscopic parameters are less likely to be missing for RV-favorable stars, and stellar age carries the highest residual missingness uniformly.
+
+\begin{table*}[h]
+  \centering
+  \begin{tabular}{lll}
+    \hline
+    \textbf{Parameter} & \textbf{Value} & \textbf{Role} \\
+    \hline
+    $\alpha_{\mathrm{lum}}$    & 0.30 & Malmquist luminosity scaling (Step 1) \\
+    $\alpha_{\mathrm{teff}}$   & 0.20 & Teff noise-proxy scaling (Step 1) \\
+    $\beta_{\mathrm{transit}}$ & 0.40 & Transit-method photometric feature reduction (Step 2) \\
+    $\beta_{\mathrm{RV}}$      & 0.35 & RV-method spectroscopic feature reduction (Step 2) \\
+    \hline
+  \end{tabular}
+  \caption{Default hyperparameters for the RSHM mask generator. All four parameters are exposed as keyword arguments and can be swept for sensitivity analysis.}
+  \label{tab:rshm-params}
+\end{table*}
+
+\subsection{Methodology}
+
+\section{Results}
+
+\subsection{Imputation Benchmark}
+
+\subsection{Complete-Case PCA}
+
+\subsection{SWRF-Imputed PCA}
+
+\section{Discussion}
+
+\section{Conclusion}
+
+\bibliography{ref}
+
+\end{document}

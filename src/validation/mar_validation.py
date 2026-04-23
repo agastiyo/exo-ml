@@ -41,7 +41,7 @@ def MAR_mask(X_known, prop_missing, rng):
   but less extreme rows are not excluded. Exact prop_missing is preserved.
   """
   N, P = X_known.shape
-  n_cells_target = int(np.floor(prop_missing * N * P))
+  n_cells_target = np.floor(prop_missing * N * P)
 
   trigger_idx = rng.integers(0, P)
   trigger = X_known[:, trigger_idx]

@@ -57,7 +57,7 @@ def MNAR_mask(X_known, prop_missing, rng):
 
   # Sample which cells to mask, targeting prop_missing fraction of all cells
   total_cells = N * P
-  n_to_mask = max(1, int(np.round(prop_missing * total_cells)))
+  n_to_mask = np.floor(prop_missing * N * P)
 
   # Draw cells without replacement according to z-score probabilities
   flat_indices = rng.choice(
