@@ -1,5 +1,7 @@
 \documentclass[preprint]{aastex631}
 
+\usepackage{amsmath}
+
 \begin{document}
 
 \title{Validation of SWRF-Impute: MCAR, MAR, MNAR, and Realistic Stellar Host Testing}
@@ -211,13 +213,105 @@ In MNAR data, the probability that a value is missing depends on the unobserved 
 The total number of masked cells is $n_{\text{miss}} \approx \text{prop\_missing} \times N \times P$, matching the global target proportion. Because missingness across all cells is driven by the unobserved values themselves (via the z-score weighting), the mechanism is non-ignorable (MNAR): no subset of the remaining observed data can fully explain which entries are absent. The stochastic sampling ensures that mask generation varies between runs, providing a more realistic and stable evaluation across different random seeds.
 
 \subsection{Realistic Stellar Host Missingness (RSHM)}
+\label{sec:rshm}
 
-\textit{[Placeholder — implementation in progress.]}
+RSHM is a domain-specific missingness mechanism introduced in this work. It simulates the detection-driven selection effects that produce MNAR-structured incompleteness in confirmed exoplanet host star catalogs such as the NASA Exoplanet Archive \texttt{STELLARHOSTS} table. The central physical insight is that the act of detecting a planet around a star is itself a biased selection event whose outcome correlates with the very stellar parameters that would subsequently be measured. Missingness in the resulting catalog is therefore non-ignorable: the probability that a stellar parameter is absent depends on the unobserved values of the stellar parameters themselves \citep{hsuOccurrenceRatesPlanets2019}.
 
-RSHM simulates the detection-driven selection effects present in real exoplanet host star catalogs. Stars hosting planets that fall below survey detection thresholds (due to long orbital periods, low planet-to-star radius ratios, or unfavorable stellar noise properties) are systematically underrepresented in confirmed-host samples. This produces MNAR-like missingness whose structure is physically motivated by the coupling between stellar parameters (\texttt{st\_teff}, \texttt{st\_mass}, \texttt{st\_met\_FeH}) and planet detectability.
+The mechanism is operationalized in five sequential steps. Steps 1--3 construct a per-feature missingness probability matrix $\mathbf{P} \in [0,1]^{N \times P}$, where $P_{ij}$ is the probability that feature $j$ of star $i$ is missing. Step 4 uses $\mathbf{P}$ to select which rows represent non-detected stars and removes them entirely. Step 5 draws the residual cell-level missingness for the surviving rows.
 
-The mechanism will be parameterized by a detection probability function $p_{\text{detect}}(i)$ that depends on each star's stellar properties and planet count, with stars assigned to missing status with probability $1 - p_{\text{detect}}(i)$ across multiple features.
+Two catalog-level features --- \texttt{sy\_pnum} (planet count) and \texttt{sy\_snum} (companion star count) --- are fixed at $P_{ij} = 0$ throughout, since by definition these quantities must be known for a star to appear in the host catalog at all. All other features participate in the missingness model.
 
-\bibliography{references}
+\subsubsection*{Step 1 --- Survey Selection: Malmquist Bias and Photometric Noise Proxy}
+
+Magnitude-limited surveys such as Kepler preferentially include intrinsically luminous stars. Stars fainter than the survey's brightness threshold are systematically underrepresented in the confirmed-host sample and, when they do appear, receive less follow-up characterization \citep{gaidosOBJECTSKEPLERSMIRROR2012}. This is Malmquist bias: it couples the probability of stellar-parameter measurement to the star's luminosity.
+
+A second selection effect operates through photometric noise. The Kepler pipeline detection threshold is set by the combined differential photometric precision ($\sigma_{\mathrm{CDPP}}$) of each target star. Cooler stars are intrinsically more variable and produce higher $\sigma_{\mathrm{CDPP}}$, which raises the minimum detectable transit depth and lowers the effective detection probability for that star \textbf{[CITATION GAP: Howard et al.\ (2012), ``Planet Occurrence Within 0.25 AU of Solar-Type Stars from Kepler,'' ApJS 201(2) --- establishes $\sigma_{\mathrm{CDPP}}$ as the operative detection gate and Teff as a significant predictor of photometric detectability]}. Because $\sigma_{\mathrm{CDPP}}$ is not available in the synthetic population, stellar effective temperature $T_{\mathrm{eff}}$ is used as its proxy: lower $T_{\mathrm{eff}}$ implies higher photometric noise and lower detection probability.
+
+Both effects act on all features of a row simultaneously --- if a star's planets are never detected, none of its stellar parameters are characterized --- and are encoded as a row-level additive adjustment:
+\begin{equation}
+  P_{ij} \;\leftarrow\; P_{ij}
+    + \alpha_{\mathrm{lum}}\,\bigl(-z_{\mathrm{lum},i}\bigr)
+    + \alpha_{\mathrm{teff}}\,\bigl(-z_{\mathrm{teff},i}\bigr),
+  \qquad j \in \mathcal{J}_{\mathrm{maskable}}
+  \label{eq:rshm-step1}
+\end{equation}
+where $z_{\mathrm{lum},i}$ and $z_{\mathrm{teff},i}$ are the $z$-scores of star $i$'s luminosity and effective temperature within the synthetic population, and $\alpha_{\mathrm{lum}}$, $\alpha_{\mathrm{teff}} > 0$ are scaling constants. Stars with below-average luminosity or temperature (negative $z$-scores) receive a positive missingness increment; stars above average receive a negative increment (reduced missingness). The $z$-scores are signed, not absolute, so the adjustment is monotone in the underlying stellar properties.
+
+\subsubsection*{Step 2 --- Detection Method: Transit and Radial Velocity Feature Dropout}
+
+Transit and radial velocity (RV) surveys together account for the large majority of confirmed exoplanet detections \textbf{[CITATION GAP: Mirchandani \& Vishwakarma (2025), ``Detection Biases and Methodological Impacts in Exoplanet Discovery,'' IEEE ICSCSA --- quantifies detection method biases across 23 parameters from the NASA Exoplanet Archive]}. Each method introduces systematic biases in which stellar parameters are subsequently characterized, because follow-up observations are designed around the detection modality:
+
+\begin{itemize}
+  \item \textbf{Transit hosts} require precise photometry of a bright, geometrically favorable star. Transit depth scales as $\delta \propto (R_p/R_\star)^2$, so small stellar radii produce deeper, more detectable transits. Transit-detected hosts therefore tend to be luminous (photometric precision) and small (transit depth), and their \emph{photometric} parameters --- $T_{\mathrm{eff}}$, radius, luminosity, and surface gravity --- are typically well-measured \citep{burkeTERRESTRIALPLANETOCCURRENCE2015}.
+
+  \item \textbf{RV hosts} require high-resolution spectroscopy of a bright, spectrally stable star. The planet-metallicity correlation preferentially populates RV target lists with metal-rich stars. RV-detected hosts therefore tend to be luminous and metal-rich, and their \emph{spectroscopic} parameters --- metallicity and $T_{\mathrm{eff}}$ --- are typically well-measured \textbf{[CITATION GAP: Mirchandani \& Vishwakarma (2025) --- establishes that RV targets high-luminosity, metal-rich stars and drives excellent spectroscopic characterization]}.
+\end{itemize}
+
+Detection favorability for each method is scored per star using $z$-scores of the relevant driving parameters:
+\begin{align}
+  s_{\mathrm{transit},i} &= z_{\mathrm{lum},i} - z_{\mathrm{rad},i} \label{eq:transit-score} \\
+  s_{\mathrm{RV},i}      &= z_{\mathrm{lum},i} + z_{\mathrm{met},i} \label{eq:rv-score}
+\end{align}
+A positive score indicates a star well-suited to detection by that method. For such stars, the missingness probabilities of the corresponding feature subset are reduced:
+\begin{align}
+  P_{ij} &\leftarrow P_{ij} - \beta_{\mathrm{transit}}\,\max(0,\, s_{\mathrm{transit},i}),
+    \quad j \in \mathcal{J}_{\mathrm{phot}} \label{eq:transit-dropout} \\
+  P_{ij} &\leftarrow P_{ij} - \beta_{\mathrm{RV}}\,\max(0,\, s_{\mathrm{RV},i}),
+    \quad j \in \mathcal{J}_{\mathrm{spec}} \label{eq:rv-dropout}
+\end{align}
+where $\mathcal{J}_{\mathrm{phot}} = \{\texttt{st\_teff},\, \texttt{st\_rad},\, \texttt{st\_lum},\, \texttt{st\_logg}\}$ and $\mathcal{J}_{\mathrm{spec}} = \{\texttt{st\_met\_FeH},\, \texttt{st\_teff}\}$ are the photometric and spectroscopic feature subsets respectively. The $\max(0,\,\cdot)$ ensures that only detection-favorable stars benefit; unfavorable stars are unchanged. Steps 1 and 2 together produce a feature probability matrix whose structure encodes the method-specific characterization fingerprint of each star.
+
+\subsubsection*{Step 3 --- Stellar Age: Uniform Missingness Increase}
+
+Stellar age is the most difficult parameter to constrain regardless of detection method. Isochrone fitting degeneracies, limited gyrochronological calibration at old ages, and the absence of detectable asteroseismic signals for most field stars all contribute to systematically high age-measurement failure rates across all detection modalities. This is reflected in real catalogs: the Hypatia Catalog of exoplanet hosts shows lithium completeness of $\sim$34\%, the lowest of any measured element, consistent with the difficulty of chromospheric-activity and Li-depletion age proxies \textbf{[CITATION GAP: Zammit et al.\ (2024), ``Exoplanet host star classification: multi-objective optimization of incomplete stellar abundance data,'' RASTI 3(1) --- documents real-world feature completion rates 54--73\%, with Li at 34\%]}. A uniform additive increase is applied:
+\begin{equation}
+  P_{i,\,\texttt{age}} \;\leftarrow\; P_{i,\,\texttt{age}} + \delta_{\mathrm{age}},
+  \qquad \forall\, i \label{eq:age-step}
+\end{equation}
+After Steps 1--3, all entries of $\mathbf{P}$ are clipped to $[0,1]$ and the $\texttt{sy\_pnum}$, $\texttt{sy\_snum}$ columns are reset to zero.
+
+\subsubsection*{Step 4 --- Non-Detection Row Deletion}
+
+Stars whose planets would never be detected by transit or RV surveys do not appear in confirmed-host catalogs at all. To simulate this, the $n_{\mathrm{delete}} = \lfloor p_{\mathrm{miss}} \cdot N \rfloor$ stars with the highest row-mean missingness probability are identified and their maskable features are set to NaN:
+\begin{equation}
+  \bar{P}_i = \frac{1}{|\mathcal{J}_{\mathrm{maskable}}|} \sum_{j \in \mathcal{J}_{\mathrm{maskable}}} P_{ij},
+  \qquad \mathcal{D} = \mathrm{argtop}_{n_{\mathrm{delete}}}(\bar{P})
+  \label{eq:row-deletion}
+\end{equation}
+\begin{equation}
+  \mathbf{M}_{ij} = 1 \quad \forall\, i \in \mathcal{D},\; j \in \mathcal{J}_{\mathrm{maskable}}
+  \label{eq:deletion-mask}
+\end{equation}
+This step models the physical boundary between stars that are in the confirmed-host catalog (retained rows) and stars that are not (deleted rows) \citep{gaidosOBJECTSKEPLERSMIRROR2012,burkeTERRESTRIALPLANETOCCURRENCE2015}. The coupling of $\bar{P}_i$ to the true values of \texttt{st\_lum}, \texttt{st\_teff}, \texttt{st\_rad}, and \texttt{st\_met\_FeH} makes this deletion non-ignorable (MNAR): the probability of complete non-detection depends on the unobserved stellar properties themselves \citep{hsuOccurrenceRatesPlanets2019}. Unlike the generic MNAR mask (Section~\ref{sec:mask-generation}), the deletion structure here encodes a physically motivated causal model of how survey detection probability is coupled to stellar parameters \textbf{[CITATION GAP: Mirchandani \& Vishwakarma (2025) --- establishes that transit and RV detection probability is jointly determined by luminosity, radius, and metallicity]}.
+
+\subsubsection*{Step 5 --- Feature-Level Cell Missingness for Retained Rows}
+
+Stars that do appear in the catalog (surviving rows, $i \notin \mathcal{D}$) are still subject to partial missingness: not every stellar parameter is measured for every host. The residual missing-cell budget is:
+\begin{equation}
+  n_{\mathrm{remaining}} = \max\!\Bigl(0,\;\Bigl\lfloor p_{\mathrm{miss}} \cdot N \cdot P\Bigr\rfloor - n_{\mathrm{delete}} \cdot |\mathcal{J}_{\mathrm{maskable}}|\Bigr)
+  \label{eq:residual-budget}
+\end{equation}
+These $n_{\mathrm{remaining}}$ cells are drawn without replacement from the eligible (retained row, maskable feature) pairs, with sampling probability proportional to $P_{ij}$ for $i \notin \mathcal{D}$, $j \in \mathcal{J}_{\mathrm{maskable}}$. The $P_{ij}$ weights are normalized to a valid probability distribution before sampling. This preserves the feature-level structure from Steps 1--3: within the surviving catalog rows, photometric parameters are less likely to be missing for transit-favorable stars, spectroscopic parameters are less likely to be missing for RV-favorable stars, and stellar age carries the highest residual missingness uniformly.
+
+\subsubsection*{Default Hyperparameters}
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{lll}
+    \hline
+    \textbf{Parameter} & \textbf{Value} & \textbf{Role} \\
+    \hline
+    $\alpha_{\mathrm{lum}}$    & 0.30 & Malmquist luminosity scaling (Step 1) \\
+    $\alpha_{\mathrm{teff}}$   & 0.20 & Teff noise-proxy scaling (Step 1) \\
+    $\beta_{\mathrm{transit}}$ & 0.40 & Transit-method photometric feature reduction (Step 2) \\
+    $\beta_{\mathrm{RV}}$      & 0.35 & RV-method spectroscopic feature reduction (Step 2) \\
+    $\delta_{\mathrm{age}}$    & 0.30 & Uniform age-feature missingness boost (Step 3) \\
+    \hline
+  \end{tabular}
+  \caption{Default hyperparameters for the RSHM mask generator. All five parameters are exposed as keyword arguments and can be swept for sensitivity analysis.}
+  \label{tab:rshm-params}
+\end{table}
+
+\bibliography{ref}
 
 \end{document}
