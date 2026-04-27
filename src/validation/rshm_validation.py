@@ -1,7 +1,7 @@
 #%%
 import numpy as np
 import src.utils.datamatrix as DMatrix
-from src.validation._common import run_validation
+from src.validation._common import run_validation_rshm
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -111,7 +111,7 @@ def RSHM_mask(X_known, prop_missing, rng,
     # n_rows_delete = round(prop_missing * N) so that deleted rows account
     # for the bulk of the total missing-cell budget.
 
-    n_rows_delete = np.floor(prop_missing * N)
+    n_rows_delete = int(np.floor(prop_missing * N))
     row_avg = P_mat[:, MASKABLE_COLS].mean(axis=1)
 
     # argpartition is O(N) — faster than full sort for large N
@@ -129,13 +129,16 @@ def RSHM_mask(X_known, prop_missing, rng,
     # Draw prop_missing * N * P cells from the surviving rows,
     # weighted by their per-feature probabilities.
 
-    n_total_target = np.floor(prop_missing * N * P)
-    
+    n_total_target = int(np.floor(prop_missing * N * P))
+
+    p_flat = np.clip(P_mat.flatten(), 0.0, None)
+    p_flat = p_flat / p_flat.sum()
+
     flat_indices = rng.choice(
-        N*P,
+        int(N * P),
         size=n_total_target,
         replace=False,
-        p=P_mat.flatten()
+        p=p_flat
     )
     
     rows, cols = np.unravel_index(flat_indices, (N, P))
@@ -146,6 +149,6 @@ def RSHM_mask(X_known, prop_missing, rng,
     return X_masked, mask
 
 #%%
-run_validation(RSHM_mask, "rshm", X_known, bounds_list, n_tot=1, n_runs=35)
+run_validation_rshm(RSHM_mask, X_known, bounds_list, n_tot=1, n_runs=35)
 
 # %%

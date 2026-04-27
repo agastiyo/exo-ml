@@ -7,16 +7,18 @@ from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 from sklearn.ensemble import RandomForestRegressor
 from src.utils.impute import SWRF_Impute
+from src.utils.knnxkde import KNNxKDE
 import src.utils.pca as PCA
 
-METHOD_NAMES       = ["Mean", "Median", "KNN", "MICE", "MissForest", "SWRF-Impute"]
-STOCHASTIC_METHODS = ["MICE", "SWRF-Impute", "MissForest"]   # true posterior samplers — IQR coverage computed
+METHOD_NAMES       = ["Mean", "Median", "KNN", "MICE", "MissForest", "kNNxKDE", "SWRF-Impute"]
+STOCHASTIC_METHODS = ["MICE", "SWRF-Impute", "MissForest", "kNNxKDE"]   # true posterior samplers — IQR coverage computed
 N_RUNS_MF          = 5                          # MissForest: near-deterministic; small ensemble for stable mean only
+N_DRAWS_KKDE       = 35                         # kNNxKDE: match MICE n_runs for fair ensemble-size comparison
 
 def RMSE_masked(X_original, X_imputed, mask):
-  scaler = StandardScaler()
-  X_og = scaler.fit_transform(X_original)
-  X_imp = scaler.fit_transform(X_imputed)
+  scaler = StandardScaler().fit(X_original)
+  X_og = scaler.transform(X_original)
+  X_imp = scaler.transform(X_imputed)
   return np.sqrt(np.mean((X_og[mask] - X_imp[mask])**2))
 
 def eig_log_l2(true, imp, eps=1e-8):
@@ -168,6 +170,30 @@ def run_validation(mask_fn, mechanism_name, X_known, bounds_list,
       eigvals_dict["MICE"].append(eig_log_l2(eigvals_true, eig))
       cov_dict["MICE"].append(iqr_coverage(X_known, mice_ensemble, mask))
 
+      # ------------------------------------------------------------------
+      # kNNxKDE — single call returns a sparse dict {(row, col): draws[K]}.
+      # Convert to (K, N, P) ensemble: observed cells broadcast from X_masked,
+      # missing cells filled from the draw arrays.
+      # Uses global np.random state (upstream design); not seeded via iter_rng.
+
+      N_r, P_r = X_masked.shape
+      kkde_draws = KNNxKDE(h=0.03, tau=1.0/50.0).impute_samples(X_masked, nb_draws=N_DRAWS_KKDE)
+      kkde_ensemble = np.where(
+          np.isnan(X_masked)[np.newaxis, :, :],
+          np.zeros((N_DRAWS_KKDE, N_r, P_r)),
+          X_masked[np.newaxis, :, :]
+      )
+      if kkde_draws is not None:
+        for (row, col), cell_draws in kkde_draws.items():
+          kkde_ensemble[:, row, col] = cell_draws
+      X_kkde_pooled = np.mean(kkde_ensemble, axis=0)
+      print(f"    kNNxKDE Done")
+
+      diff_dict["kNNxKDE"].append(RMSE_masked(X_known, X_kkde_pooled, mask))
+      eig, _ = PCA.RunPCA(X_kkde_pooled)
+      eigvals_dict["kNNxKDE"].append(eig_log_l2(eigvals_true, eig))
+      cov_dict["kNNxKDE"].append(iqr_coverage(X_known, kkde_ensemble, mask))
+
     for name in METHOD_NAMES:
       mean_diff_dict[name].append(diff_dict[name])
       eigval_dists_dict[name].append(eigvals_dict[name])
@@ -188,3 +214,145 @@ def run_validation(mask_fn, mechanism_name, X_known, bounds_list,
 
   print(f"Saved to {save_dir}")
   return mean_diff_dict, eigval_dists_dict, coverage_dict, props_missing, save_dir
+
+
+def run_validation_rshm(mask_fn, X_known, bounds_list,
+                        n_tot=10, props_missing=None, n_runs=35, seed=None):
+  """
+  RSHM-specific validation harness.
+
+  RSHM deletes entire rows (non-detected systems), so per-cell ground truth
+  is unavailable for deleted rows. This harness measures only population-level
+  eigenvalue recovery: how well each imputer reconstructs the TRUE full-population
+  PC spectrum from a biased, row-deleted, cell-masked subset.
+
+  Parameters
+  ----------
+  mask_fn         : callable(X_known, prop_missing, rng) -> (X_masked, mask)
+                    mask_fn is expected to return X_masked with fewer rows than
+                    X_known (RSHM deletes rows); the mask return value is unused.
+  X_known         : ndarray  complete-case data matrix (full population, N rows)
+  bounds_list     : list of P tuples (lo, hi) for SWRF-Impute
+  n_tot           : int   number of outer repetitions
+  props_missing   : array-like  missingness proportions to sweep
+  n_runs          : int   draws for MICE and SWRF-Impute
+  seed            : int   base random seed
+
+  Returns
+  -------
+  eigval_dists_dict, props_missing, save_dir
+  """
+  if props_missing is None:
+    props_missing = np.arange(0.1, 0.7, 0.1)
+  props_missing = np.asarray(props_missing)
+
+  rng = np.random.default_rng()
+  if seed:
+    rng = np.random.default_rng(seed)
+
+  # True full-population eigenvalues — the target to recover.
+  eigvals_true, _ = PCA.RunPCA(X_known)
+
+  eigval_dists_dict = {name: [] for name in METHOD_NAMES}
+
+  for j in range(n_tot):
+    print(f"Iteration {j+1}/{n_tot}")
+    eigvals_dict = {name: [] for name in METHOD_NAMES}
+
+    for prop_missing in props_missing:
+      print(f"  prop_missing={prop_missing:.2f}")
+
+      iter_rng = np.random.default_rng(rng.integers(0, 2**31))
+      # X_masked has shape (N_surviving, P) — row deletion already applied.
+      # mask is unused (no cell-level ground truth for deleted rows).
+      X_masked, _ = mask_fn(X_known, prop_missing, iter_rng)
+
+      # ------------------------------------------------------------------
+      # Deterministic methods
+
+      X_mean   = SimpleImputer(strategy='mean').fit_transform(X_masked)
+      print(f"    Mean Done")
+      X_median = SimpleImputer(strategy='median').fit_transform(X_masked)
+      print(f"    Median Done")
+
+      scaler  = StandardScaler()
+      X_knn   = KNNImputer(n_neighbors=5).fit_transform(scaler.fit_transform(X_masked))
+      X_knn   = scaler.inverse_transform(X_knn)
+      print(f"    KNN Done")
+
+      for name, X_imp in [("Mean", X_mean), ("Median", X_median), ("KNN", X_knn)]:
+        eig, _ = PCA.RunPCA(X_imp)
+        eigvals_dict[name].append(eig_log_l2(eigvals_true, eig))
+
+      # ------------------------------------------------------------------
+      # SWRF-Impute
+
+      swrf_rng = np.random.default_rng(rng.integers(0, 2**31))
+      X_out    = SWRF_Impute(X_masked, bounds_list, rng=swrf_rng)
+      X_pgi    = np.mean(X_out, axis=0)
+      print(f"    SWRF Done")
+      eig, _ = PCA.RunPCA(X_pgi)
+      eigvals_dict["SWRF-Impute"].append(eig_log_l2(eigvals_true, eig))
+
+      # ------------------------------------------------------------------
+      # MissForest
+
+      mf_matrices = []
+      for k in range(N_RUNS_MF):
+        rf_state = int(rng.integers(0, 2**31))
+        rf  = RandomForestRegressor(n_estimators=30, max_depth=10, random_state=rf_state)
+        X_mf = IterativeImputer(estimator=rf, max_iter=10,
+                                random_state=rf_state).fit_transform(X_masked)
+        mf_matrices.append(X_mf)
+        print(f"    MissForest {k+1}/{N_RUNS_MF}")
+      X_mf_pooled = np.mean(np.stack(mf_matrices, axis=0), axis=0)
+      eig, _ = PCA.RunPCA(X_mf_pooled)
+      eigvals_dict["MissForest"].append(eig_log_l2(eigvals_true, eig))
+
+      # ------------------------------------------------------------------
+      # MICE
+
+      mice_matrices = []
+      for k in range(n_runs):
+        mice_state = int(rng.integers(0, 2**31))
+        X_mice = IterativeImputer(max_iter=10, random_state=mice_state,
+                                  sample_posterior=True).fit_transform(X_masked)
+        mice_matrices.append(X_mice)
+        print(f"    MICE {k+1}/{n_runs}")
+      X_mice_pooled = np.mean(np.stack(mice_matrices, axis=0), axis=0)
+      eig, _ = PCA.RunPCA(X_mice_pooled)
+      eigvals_dict["MICE"].append(eig_log_l2(eigvals_true, eig))
+
+      # ------------------------------------------------------------------
+      # kNNxKDE
+
+      N_r, P_r = X_masked.shape
+      kkde_draws = KNNxKDE(h=0.03, tau=1.0/50.0).impute_samples(X_masked, nb_draws=N_DRAWS_KKDE)
+      kkde_ensemble = np.where(
+          np.isnan(X_masked)[np.newaxis, :, :],
+          np.zeros((N_DRAWS_KKDE, N_r, P_r)),
+          X_masked[np.newaxis, :, :]
+      )
+      if kkde_draws is not None:
+        for (row, col), cell_draws in kkde_draws.items():
+          kkde_ensemble[:, row, col] = cell_draws
+      X_kkde_pooled = np.mean(kkde_ensemble, axis=0)
+      print(f"    kNNxKDE Done")
+      eig, _ = PCA.RunPCA(X_kkde_pooled)
+      eigvals_dict["kNNxKDE"].append(eig_log_l2(eigvals_true, eig))
+
+    for name in METHOD_NAMES:
+      eigval_dists_dict[name].append(eigvals_dict[name])
+
+  # ------------------------------------------------------------------
+  # Bundle outputs — eigval_dists only (no RMSE, no coverage for RSHM)
+
+  timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+  save_dir  = os.path.join("output", "rshm_validation_runs", timestamp)
+  os.makedirs(save_dir, exist_ok=True)
+
+  np.save(os.path.join(save_dir, "eigval_dists.npy"), eigval_dists_dict, allow_pickle=True)
+  np.save(os.path.join(save_dir, "props_missing.npy"), props_missing)
+
+  print(f"Saved to {save_dir}")
+  return eigval_dists_dict, props_missing, save_dir
